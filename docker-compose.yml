@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-glps}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set me}
+      POSTGRES_DB: ${POSTGRES_DB:-glps}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-glps}"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile, target: runner }
+    command: ["node", "dist/db/migrate.js"]
+    environment:
+      DATABASE_URL: "${DATABASE_URL:?set me}"
+      MIGRATE_DB_PASSWORD: "${MIGRATE_DB_PASSWORD:?set me}"
+      APP_DB_PASSWORD: "${APP_DB_PASSWORD:?set me}"
+      SEED_DEMO: "${SEED_DEMO:-false}"
+      NODE_ENV: production
+    depends_on: { db: { condition: service_healthy } }
+    restart: "no"
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile, target: runner }
+    environment:
+      DATABASE_URL_APP: "${DATABASE_URL_APP:?set me}" # connects as glps_app — RLS enforced, NOT the table owner
+      JWT_SECRET: "${JWT_SECRET:?set me}"
+      TOKEN_PEPPER: "${TOKEN_PEPPER:?set me}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+      NODE_ENV: production
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1))"]
+      interval: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args: { VITE_API_BASE: "/api" }
+    ports: ["8080:80"] # nginx serves SPA + proxies /api -> api:3000
+    depends_on: { api: { condition: service_healthy } }
+
+volumes: { pgdata: }

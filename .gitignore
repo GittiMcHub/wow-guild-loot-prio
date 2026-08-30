@@ -7,6 +7,7 @@ coverage/
 .DS_Store
 pnpm-lock.yaml.bak
 backups/
+secrets/
 apps/web/dist/
 apps/api/dist/
 packages/*/dist/

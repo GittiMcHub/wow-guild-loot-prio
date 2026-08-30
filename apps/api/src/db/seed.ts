@@ -144,7 +144,7 @@ async function seedGuild(db: AppTx, guildId: string, slug: string, name: string)
   return { guildId, phaseId, adminUsername: 'admin', adminPassword: DEMO_ADMIN_PASSWORD };
 }
 
-async function main() {
+export async function runSeed(): Promise<void> {
   const migrateUrl = process.env.DATABASE_URL_MIGRATE ?? process.env.DATABASE_URL;
   if (!migrateUrl) throw new Error('DATABASE_URL_MIGRATE (or DATABASE_URL) is required to seed.');
 
@@ -187,8 +187,10 @@ async function main() {
   }
 }
 
-if (process.env.SEED_DEMO !== 'false') {
-  main().catch((err) => {
+// `pnpm run seed` / `make seed` invokes this file directly — always seed then.
+// The docker-compose `migrate` service imports runSeed() instead, gated on SEED_DEMO=true.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runSeed().catch((err) => {
     console.error(err);
     process.exit(1);
   });

@@ -66,6 +66,18 @@ async function main() {
   } finally {
     await sql.end();
   }
+
+  // §5: "a seeded instance admin and two demo guilds, credentials printed to
+  // the migrate service logs — only if SEED_DEMO=true." Reuses glps_migrate,
+  // not the bootstrap connection, for the same reason the API never does.
+  if (process.env.SEED_DEMO === 'true') {
+    const migrateUrl = new URL(bootstrapUrl);
+    migrateUrl.username = 'glps_migrate';
+    migrateUrl.password = migratePassword;
+    process.env.DATABASE_URL_MIGRATE = migrateUrl.toString();
+    const { runSeed } = await import('./seed.js');
+    await runSeed();
+  }
 }
 
 main().catch((err) => {

@@ -1,0 +1,40 @@
+# Dev overrides: bind-mounted source, hot reload, dev servers exposed directly.
+# Loaded automatically alongside docker-compose.yml by `docker compose up`.
+services:
+  migrate:
+    build: { target: deps }
+    command: ["sh", "-c", "pnpm --filter @glps/api exec tsx src/db/migrate.ts"]
+    volumes:
+      - .:/repo
+      - /repo/node_modules
+      - /repo/apps/api/node_modules
+
+  api:
+    build: { target: deps }
+    command: ["pnpm", "--filter", "@glps/api", "run", "dev"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - .:/repo
+      - /repo/node_modules
+      - /repo/apps/api/node_modules
+    ports: ["3000:3000"]
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile, target: deps }
+    command: ["pnpm", "--filter", "@glps/web", "run", "dev", "--", "--host"]
+    environment:
+      VITE_API_BASE: /api
+    volumes:
+      - .:/repo
+      - /repo/node_modules
+      - /repo/apps/web/node_modules
+    # Overrides (replaces, doesn't add to) the base file's 8080:80 nginx
+    # mapping — in dev the Vite dev server on 5173 is the front door.
+    ports: !override
+      - "5173:5173"
+
+  adminer:
+    image: adminer:latest
+    ports: ["8081:8080"]
+    depends_on: { db: { condition: service_healthy } }

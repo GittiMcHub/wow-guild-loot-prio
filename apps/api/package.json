@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
-    "catalog:import": "tsx src/scripts/catalog-import.ts"
+    "catalog:import": "tsx src/scripts/catalog-import.ts",
+    "guild:create": "tsx src/scripts/guild-create.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
