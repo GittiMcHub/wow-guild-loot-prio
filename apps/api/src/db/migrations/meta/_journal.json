@@ -15,6 +15,13 @@
       "when": 1788127788748,
       "tag": "0001_rls_and_composite_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788128246737,
+      "tag": "0002_token_resolution_functions",
+      "breakpoints": true
     }
   ]
 }

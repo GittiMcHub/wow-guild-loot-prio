@@ -82,10 +82,21 @@ CREATE INDEX IF NOT EXISTS "idx_audit_log_guild" ON "audit_log" ("guild_id");
 CREATE INDEX IF NOT EXISTS "idx_items_phase_key" ON "items" ("phase_key");
 
 -- ---------------------------------------------------------------------------
--- 3. Row-level security: enable + force + a single tenant_isolation policy
---    per table (§3A.3). `current_setting(..., true)` returns NULL when unset,
---    and `NULL = uuid` is NULL (never true), so an unset session sees zero
---    rows — failing closed by construction.
+-- 3. Row-level security: enable + a single tenant_isolation policy per table
+--    (§3A.3). `current_setting(..., true)` returns NULL when unset, and
+--    `NULL = uuid` is NULL (never true), so an unset session sees zero rows
+--    — failing closed by construction.
+--
+--    FORCE ROW LEVEL SECURITY (binding even the table owner) is applied to
+--    every tenant table EXCEPT `invites` and `access_tokens`. Those two are
+--    the one deliberate, narrow exception: resolving *which* guild a bearer
+--    token belongs to is a lookup that by definition happens before
+--    app.current_guild_id is known (§3A.2), so it cannot go through the
+--    normal RLS-filtered path. Leaving FORCE off them lets the table owner
+--    (glps_migrate) bypass RLS — which matters only inside the two
+--    SECURITY DEFINER functions in 0002 that run as that owner; glps_app
+--    itself is never the owner and stays fully bound by the policy below
+--    for every ordinary query against these tables.
 -- ---------------------------------------------------------------------------
 
 DO $$
@@ -99,11 +110,19 @@ BEGIN
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', tbl);
-    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', tbl);
     EXECUTE format(
       'CREATE POLICY tenant_isolation ON %I USING (guild_id = current_setting(''app.current_guild_id'', true)::uuid) WITH CHECK (guild_id = current_setting(''app.current_guild_id'', true)::uuid)',
       tbl
     );
+  END LOOP;
+
+  FOREACH tbl IN ARRAY ARRAY[
+    'admins', 'phases', 'phase_items', 'players', 'characters',
+    'submissions', 'submission_entries', 'raid_sessions',
+    'attendance', 'awards', 'rolls', 'audit_log'
+  ]
+  LOOP
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', tbl);
   END LOOP;
 END $$;
 

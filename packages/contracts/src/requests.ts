@@ -111,6 +111,13 @@ export const zUpdateGuildSettingsRequest = z
   .partial();
 export type UpdateGuildSettingsRequest = z.infer<typeof zUpdateGuildSettingsRequest>;
 
+/** POST /g/:guildSlug/auth/login */
+export const zAdminLoginRequest = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().min(1).max(200),
+});
+export type AdminLoginRequest = z.infer<typeof zAdminLoginRequest>;
+
 /** POST /instance/guilds */
 export const zCreateGuildRequest = z.object({
   slug: z

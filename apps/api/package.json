@@ -25,6 +25,7 @@
     "argon2": "^0.41.1",
     "drizzle-orm": "^0.38.2",
     "fastify": "^5.2.0",
+    "fastify-plugin": "^5.0.1",
     "jose": "^5.9.6",
     "pino": "^9.5.0",
     "postgres": "^3.4.5",
