@@ -1,0 +1,682 @@
+[
+  {
+    "itemId": 200001,
+    "name": "Ancient Head Guard 1",
+    "quality": 3,
+    "slot": "HEAD",
+    "inventoryType": "HEAD",
+    "icon": null,
+    "source": "Skeram",
+    "classMask": null
+  },
+  {
+    "itemId": 200002,
+    "name": "Chitinous Head Guard 2",
+    "quality": 4,
+    "slot": "HEAD",
+    "inventoryType": "HEAD",
+    "icon": null,
+    "source": "Silithid Royalty",
+    "classMask": null
+  },
+  {
+    "itemId": 200003,
+    "name": "Sanctified Head Guard 3",
+    "quality": 3,
+    "slot": "HEAD",
+    "inventoryType": "HEAD",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200004,
+    "name": "Qiraji Head Guard 4",
+    "quality": 4,
+    "slot": "HEAD",
+    "inventoryType": "HEAD",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200005,
+    "name": "Chitinous Neck Guard 1",
+    "quality": 3,
+    "slot": "NECK",
+    "inventoryType": "NECK",
+    "icon": null,
+    "source": "Silithid Royalty",
+    "classMask": null
+  },
+  {
+    "itemId": 200006,
+    "name": "Sanctified Neck Guard 2",
+    "quality": 4,
+    "slot": "NECK",
+    "inventoryType": "NECK",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200007,
+    "name": "Qiraji Neck Guard 3",
+    "quality": 3,
+    "slot": "NECK",
+    "inventoryType": "NECK",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200008,
+    "name": "Carapace Neck Guard 4",
+    "quality": 4,
+    "slot": "NECK",
+    "inventoryType": "NECK",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200009,
+    "name": "Sanctified Shoulder Guard 1",
+    "quality": 3,
+    "slot": "SHOULDER",
+    "inventoryType": "SHOULDER",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200010,
+    "name": "Qiraji Shoulder Guard 2",
+    "quality": 4,
+    "slot": "SHOULDER",
+    "inventoryType": "SHOULDER",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200011,
+    "name": "Carapace Shoulder Guard 3",
+    "quality": 3,
+    "slot": "SHOULDER",
+    "inventoryType": "SHOULDER",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200012,
+    "name": "Bindings of Shoulder Guard 4",
+    "quality": 4,
+    "slot": "SHOULDER",
+    "inventoryType": "SHOULDER",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200013,
+    "name": "Qiraji Back Guard 1",
+    "quality": 3,
+    "slot": "BACK",
+    "inventoryType": "BACK",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200014,
+    "name": "Carapace Back Guard 2",
+    "quality": 4,
+    "slot": "BACK",
+    "inventoryType": "BACK",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200015,
+    "name": "Bindings of Back Guard 3",
+    "quality": 3,
+    "slot": "BACK",
+    "inventoryType": "BACK",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200016,
+    "name": "Ancient Back Guard 4",
+    "quality": 4,
+    "slot": "BACK",
+    "inventoryType": "BACK",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200017,
+    "name": "Carapace Chest Guard 1",
+    "quality": 3,
+    "slot": "CHEST",
+    "inventoryType": "CHEST",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200018,
+    "name": "Bindings of Chest Guard 2",
+    "quality": 4,
+    "slot": "CHEST",
+    "inventoryType": "CHEST",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200019,
+    "name": "Ancient Chest Guard 3",
+    "quality": 3,
+    "slot": "CHEST",
+    "inventoryType": "CHEST",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200020,
+    "name": "Chitinous Chest Guard 4",
+    "quality": 4,
+    "slot": "CHEST",
+    "inventoryType": "CHEST",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200021,
+    "name": "Bindings of Wrist Guard 1",
+    "quality": 3,
+    "slot": "WRIST",
+    "inventoryType": "WRIST",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200022,
+    "name": "Ancient Wrist Guard 2",
+    "quality": 4,
+    "slot": "WRIST",
+    "inventoryType": "WRIST",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200023,
+    "name": "Chitinous Wrist Guard 3",
+    "quality": 3,
+    "slot": "WRIST",
+    "inventoryType": "WRIST",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200024,
+    "name": "Sanctified Wrist Guard 4",
+    "quality": 4,
+    "slot": "WRIST",
+    "inventoryType": "WRIST",
+    "icon": null,
+    "source": "Ouro",
+    "classMask": null
+  },
+  {
+    "itemId": 200025,
+    "name": "Ancient Hands Guard 1",
+    "quality": 3,
+    "slot": "HANDS",
+    "inventoryType": "HANDS",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200026,
+    "name": "Chitinous Hands Guard 2",
+    "quality": 4,
+    "slot": "HANDS",
+    "inventoryType": "HANDS",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200027,
+    "name": "Sanctified Hands Guard 3",
+    "quality": 3,
+    "slot": "HANDS",
+    "inventoryType": "HANDS",
+    "icon": null,
+    "source": "Ouro",
+    "classMask": null
+  },
+  {
+    "itemId": 200028,
+    "name": "Qiraji Hands Guard 4",
+    "quality": 4,
+    "slot": "HANDS",
+    "inventoryType": "HANDS",
+    "icon": null,
+    "source": "Skeram",
+    "classMask": null
+  },
+  {
+    "itemId": 200029,
+    "name": "Chitinous Waist Guard 1",
+    "quality": 3,
+    "slot": "WAIST",
+    "inventoryType": "WAIST",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200030,
+    "name": "Sanctified Waist Guard 2",
+    "quality": 4,
+    "slot": "WAIST",
+    "inventoryType": "WAIST",
+    "icon": null,
+    "source": "Ouro",
+    "classMask": null
+  },
+  {
+    "itemId": 200031,
+    "name": "Qiraji Waist Guard 3",
+    "quality": 3,
+    "slot": "WAIST",
+    "inventoryType": "WAIST",
+    "icon": null,
+    "source": "Skeram",
+    "classMask": null
+  },
+  {
+    "itemId": 200032,
+    "name": "Carapace Waist Guard 4",
+    "quality": 4,
+    "slot": "WAIST",
+    "inventoryType": "WAIST",
+    "icon": null,
+    "source": "Silithid Royalty",
+    "classMask": null
+  },
+  {
+    "itemId": 200033,
+    "name": "Sanctified Legs Guard 1",
+    "quality": 3,
+    "slot": "LEGS",
+    "inventoryType": "LEGS",
+    "icon": null,
+    "source": "Ouro",
+    "classMask": null
+  },
+  {
+    "itemId": 200034,
+    "name": "Qiraji Legs Guard 2",
+    "quality": 4,
+    "slot": "LEGS",
+    "inventoryType": "LEGS",
+    "icon": null,
+    "source": "Skeram",
+    "classMask": null
+  },
+  {
+    "itemId": 200035,
+    "name": "Carapace Legs Guard 3",
+    "quality": 3,
+    "slot": "LEGS",
+    "inventoryType": "LEGS",
+    "icon": null,
+    "source": "Silithid Royalty",
+    "classMask": null
+  },
+  {
+    "itemId": 200036,
+    "name": "Bindings of Legs Guard 4",
+    "quality": 4,
+    "slot": "LEGS",
+    "inventoryType": "LEGS",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200037,
+    "name": "Qiraji Feet Guard 1",
+    "quality": 3,
+    "slot": "FEET",
+    "inventoryType": "FEET",
+    "icon": null,
+    "source": "Skeram",
+    "classMask": null
+  },
+  {
+    "itemId": 200038,
+    "name": "Carapace Feet Guard 2",
+    "quality": 4,
+    "slot": "FEET",
+    "inventoryType": "FEET",
+    "icon": null,
+    "source": "Silithid Royalty",
+    "classMask": null
+  },
+  {
+    "itemId": 200039,
+    "name": "Bindings of Feet Guard 3",
+    "quality": 3,
+    "slot": "FEET",
+    "inventoryType": "FEET",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200040,
+    "name": "Ancient Feet Guard 4",
+    "quality": 4,
+    "slot": "FEET",
+    "inventoryType": "FEET",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200041,
+    "name": "Qiraji Signet Ring 1",
+    "quality": 4,
+    "slot": "FINGER",
+    "inventoryType": "FINGER",
+    "icon": null,
+    "source": "Skeram",
+    "classMask": null
+  },
+  {
+    "itemId": 200042,
+    "name": "Qiraji Signet Ring 2",
+    "quality": 3,
+    "slot": "FINGER",
+    "inventoryType": "FINGER",
+    "icon": null,
+    "source": "Silithid Royalty",
+    "classMask": null
+  },
+  {
+    "itemId": 200043,
+    "name": "Qiraji Signet Ring 3",
+    "quality": 4,
+    "slot": "FINGER",
+    "inventoryType": "FINGER",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200044,
+    "name": "Qiraji Signet Ring 4",
+    "quality": 3,
+    "slot": "FINGER",
+    "inventoryType": "FINGER",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200045,
+    "name": "Qiraji Signet Ring 5",
+    "quality": 4,
+    "slot": "FINGER",
+    "inventoryType": "FINGER",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200046,
+    "name": "Qiraji Signet Ring 6",
+    "quality": 3,
+    "slot": "FINGER",
+    "inventoryType": "FINGER",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200047,
+    "name": "Cerebral Cortex Bomb Mk1",
+    "quality": 4,
+    "slot": "TRINKET",
+    "inventoryType": "TRINKET",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200048,
+    "name": "Cerebral Cortex Bomb Mk2",
+    "quality": 3,
+    "slot": "TRINKET",
+    "inventoryType": "TRINKET",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200049,
+    "name": "Cerebral Cortex Bomb Mk3",
+    "quality": 4,
+    "slot": "TRINKET",
+    "inventoryType": "TRINKET",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200050,
+    "name": "Cerebral Cortex Bomb Mk4",
+    "quality": 3,
+    "slot": "TRINKET",
+    "inventoryType": "TRINKET",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200051,
+    "name": "Cerebral Cortex Bomb Mk5",
+    "quality": 4,
+    "slot": "TRINKET",
+    "inventoryType": "TRINKET",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200052,
+    "name": "Cerebral Cortex Bomb Mk6",
+    "quality": 3,
+    "slot": "TRINKET",
+    "inventoryType": "TRINKET",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200053,
+    "name": "Qiraji War Blade",
+    "quality": 4,
+    "slot": "WEAPON",
+    "inventoryType": "ONEHAND",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200054,
+    "name": "Sartura's Might",
+    "quality": 4,
+    "slot": "WEAPON",
+    "inventoryType": "ONEHAND",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200055,
+    "name": "Carapace Cleaver",
+    "quality": 4,
+    "slot": "WEAPON",
+    "inventoryType": "ONEHAND",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200056,
+    "name": "C'Thun's Reckoning",
+    "quality": 4,
+    "slot": "WEAPON",
+    "inventoryType": "TWOHAND",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200057,
+    "name": "Ouroboros Greatstaff",
+    "quality": 4,
+    "slot": "WEAPON",
+    "inventoryType": "TWOHAND",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200058,
+    "name": "Emperor's Twin Blade",
+    "quality": 4,
+    "slot": "WEAPON",
+    "inventoryType": "TWOHAND",
+    "icon": null,
+    "source": "Ouro",
+    "classMask": null
+  },
+  {
+    "itemId": 200059,
+    "name": "Carapace Aegis",
+    "quality": 4,
+    "slot": "OFF_HAND",
+    "inventoryType": "SHIELD",
+    "icon": null,
+    "source": "Battleguard Sartura",
+    "classMask": null
+  },
+  {
+    "itemId": 200060,
+    "name": "Viscidus Ooze Shield",
+    "quality": 3,
+    "slot": "OFF_HAND",
+    "inventoryType": "SHIELD",
+    "icon": null,
+    "source": "Viscidus",
+    "classMask": null
+  },
+  {
+    "itemId": 200061,
+    "name": "Emperor's Silken Fan",
+    "quality": 4,
+    "slot": "OFF_HAND",
+    "inventoryType": "OFFHAND",
+    "icon": null,
+    "source": "Twin Emperors",
+    "classMask": null
+  },
+  {
+    "itemId": 200062,
+    "name": "Fankriss Tome of Binding",
+    "quality": 3,
+    "slot": "OFF_HAND",
+    "inventoryType": "OFFHAND",
+    "icon": null,
+    "source": "Fankriss the Unyielding",
+    "classMask": null
+  },
+  {
+    "itemId": 200063,
+    "name": "Qiraji Compound Bow",
+    "quality": 4,
+    "slot": "RANGED",
+    "inventoryType": "RANGED",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200064,
+    "name": "Silithid Chitin Rifle",
+    "quality": 3,
+    "slot": "RANGED",
+    "inventoryType": "RANGED",
+    "icon": null,
+    "source": "Silithid Royalty",
+    "classMask": null
+  },
+  {
+    "itemId": 200065,
+    "name": "Huhuran Stinger Crossbow",
+    "quality": 4,
+    "slot": "RANGED",
+    "inventoryType": "RANGED",
+    "icon": null,
+    "source": "Princess Huhuran",
+    "classMask": null
+  },
+  {
+    "itemId": 200066,
+    "name": "Idol of the Sandstorm",
+    "quality": 3,
+    "slot": "RANGED",
+    "inventoryType": "RELIC",
+    "icon": null,
+    "source": "Ouro",
+    "classMask": null
+  },
+  {
+    "itemId": 200067,
+    "name": "Libram of the Exarchs",
+    "quality": 4,
+    "slot": "RANGED",
+    "inventoryType": "RELIC",
+    "icon": null,
+    "source": "C'Thun",
+    "classMask": null
+  },
+  {
+    "itemId": 200068,
+    "name": "Totem of the Void",
+    "quality": 3,
+    "slot": "RANGED",
+    "inventoryType": "RELIC",
+    "icon": null,
+    "source": "Skeram",
+    "classMask": null
+  }
+]
