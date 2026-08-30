@@ -9,7 +9,11 @@ import { ApiError, sendError } from './errors.js';
 import tenantPlugin from './plugins/tenant.js';
 import adminGuildRoutes from './routes/admin-guild.js';
 import authRoutes from './routes/auth.js';
+import dropsRoutes from './routes/drops.js';
 import healthRoutes from './routes/health.js';
+import invitesRoutes from './routes/invites.js';
+import phasesRoutes from './routes/phases.js';
+import submissionsRoutes from './routes/submissions.js';
 
 export interface BuiltApp {
   fastify: ReturnType<typeof Fastify>;
@@ -45,6 +49,10 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
   await fastify.register(healthRoutes, { db });
   await fastify.register(authRoutes, { db, jwtSecret: config.jwtSecret, isProd, prefix: '/api' });
   await fastify.register(adminGuildRoutes, { db, prefix: '/api' });
+  await fastify.register(invitesRoutes, { db, tokenPepper: config.tokenPepper, publicBaseUrl: config.publicBaseUrl, prefix: '/api' });
+  await fastify.register(submissionsRoutes, { db, prefix: '/api' });
+  await fastify.register(phasesRoutes, { db, prefix: '/api' });
+  await fastify.register(dropsRoutes, { db, prefix: '/api' });
 
   return {
     fastify,
