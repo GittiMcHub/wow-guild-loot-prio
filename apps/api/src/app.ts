@@ -38,8 +38,15 @@ export async function buildApp(config: AppConfig): Promise<BuiltApp> {
 
   fastify.setErrorHandler((err, _request, reply) => {
     if (err instanceof ApiError) return sendError(reply, err);
-    if ((err as { statusCode?: number }).statusCode === 429) {
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode === 429) {
       return sendError(reply, new ApiError(429, 'RATE_LIMITED', 'Too many requests.'));
+    }
+    // Fastify's own request-parsing errors (malformed/empty JSON body, payload
+    // too large, ...) already carry the right 4xx status — surface it instead
+    // of collapsing every non-ApiError into a 500.
+    if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
+      return sendError(reply, new ApiError(statusCode, 'VALIDATION_FAILED', (err as Error).message));
     }
     fastify.log.error(err);
     reply.status(500).send({ error: { code: 'INTERNAL', message: 'Internal server error.' } });

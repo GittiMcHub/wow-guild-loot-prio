@@ -13,3 +13,6 @@ apps/api/dist/
 packages/*/dist/
 *.tsbuildinfo
 .pnpm-store/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/

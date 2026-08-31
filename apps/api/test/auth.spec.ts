@@ -97,6 +97,17 @@ describe('admin login → tenant hook → RLS-scoped query (§7, §3A.2)', () =>
     expect(res.statusCode).toBe(401);
   });
 
+  it('a malformed JSON body surfaces the real 4xx status rather than a bare 500', async () => {
+    const res = await app.fastify.inject({
+      method: 'POST',
+      url: '/api/g/whatever/auth/login',
+      headers: { 'content-type': 'application/json' },
+      payload: '',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBeDefined();
+  });
+
   it('healthz and readyz are reachable unauthenticated', async () => {
     const health = await app.fastify.inject({ method: 'GET', url: '/healthz' });
     expect(health.statusCode).toBe(200);

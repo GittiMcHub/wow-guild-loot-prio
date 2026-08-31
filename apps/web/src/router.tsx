@@ -3,39 +3,30 @@ import { AdminDashboardPage } from './routes/admin/dashboard';
 import { AdminLoginPage } from './routes/admin/login';
 import { HomePage } from './routes/home';
 import { InvitePage } from './routes/invite';
-import { MyListPage } from './routes/my-list';
+import { ListBuilderPage } from './routes/list-builder';
 
 const rootRoute = createRootRoute({ component: Outlet });
 
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: HomePage });
 
-const inviteRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/i/$token',
-  component: () => {
-    const { token } = inviteRoute.useParams();
-    return <InvitePage token={token} />;
-  },
-});
+const inviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/i/$token', component: InviteRouteComponent });
+function InviteRouteComponent() {
+  const { token } = inviteRoute.useParams();
+  return <InvitePage token={token} />;
+}
 
-const myListRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/b/$token',
-  component: () => {
-    const { token } = myListRoute.useParams();
-    return <MyListPage token={token} />;
-  },
-});
+const myListRoute = createRoute({ getParentRoute: () => rootRoute, path: '/b/$token', component: MyListRouteComponent });
+function MyListRouteComponent() {
+  const { token } = myListRoute.useParams();
+  return <ListBuilderPage token={token} />;
+}
 
-const adminLoginRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/g/$guildSlug/login',
-  component: () => {
-    const { guildSlug } = adminLoginRoute.useParams();
-    const navigate = useNavigate();
-    return <AdminLoginPage guildSlug={guildSlug} onLoggedIn={() => navigate({ to: '/admin' })} />;
-  },
-});
+const adminLoginRoute = createRoute({ getParentRoute: () => rootRoute, path: '/g/$guildSlug/login', component: AdminLoginRouteComponent });
+function AdminLoginRouteComponent() {
+  const { guildSlug } = adminLoginRoute.useParams();
+  const navigate = useNavigate();
+  return <AdminLoginPage guildSlug={guildSlug} onLoggedIn={() => navigate({ to: '/admin' })} />;
+}
 
 const adminDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminDashboardPage });
 

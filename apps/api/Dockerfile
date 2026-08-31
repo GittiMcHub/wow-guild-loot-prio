@@ -58,7 +58,7 @@ COPY apps/api/src/db/migrations ./apps/api/dist/db/migrations
 # TS-native dev (tsx/vitest resolve it directly) — the runner image has no
 # .ts files, only compiled dist/, so repoint them here to the built output.
 RUN for pkg in core contracts item-data; do \
-      node -e "const fs=require('fs'); const p='./packages/$pkg/package.json'; const j=JSON.parse(fs.readFileSync(p)); j.main='./dist/index.js'; j.types='./dist/index.d.ts'; j.exports={'.': {types:'./dist/index.d.ts', default:'./dist/index.js'}}; fs.writeFileSync(p, JSON.stringify(j, null, 2));"; \
+      node -e "const fs=require('fs'); const p='./packages/$pkg/package.json'; const j=JSON.parse(fs.readFileSync(p)); j.main='./dist/index.js'; j.types='./dist/index.d.ts'; j.exports={'.': {types:'./dist/index.d.ts', default:'./dist/index.js'}}; if (j.name === '@glps/core') j.exports['./codec'] = {types:'./dist/codec.d.ts', default:'./dist/codec.js'}; fs.writeFileSync(p, JSON.stringify(j, null, 2));"; \
     done
 
 RUN chown -R glps:glps /repo

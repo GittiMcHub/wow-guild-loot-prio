@@ -47,7 +47,19 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       player: { id: ctx.player.id, displayName: ctx.player.displayName, discordTag: ctx.player.discordTag },
       characters: ctx.characters,
       submissionStatus: ctx.submission?.status ?? 'DRAFT',
-      phase: ctx.phase ? { key: ctx.phase.key, name: ctx.phase.name, submissionsCloseAt: ctx.phase.submissionsCloseAt } : null,
+      phase: ctx.phase
+        ? { key: ctx.phase.key, name: ctx.phase.name, status: ctx.phase.status, submissionsCloseAt: ctx.phase.submissionsCloseAt, open: phaseIsOpen(ctx.phase) }
+        : null,
+      // Enough of guild_settings for the client to run @glps/core's computeCapacity
+      // and validateSubmission live (§10) — never the full admin settings object.
+      settings: ctx.settings
+        ? {
+            listSize: ctx.settings.listSize,
+            twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
+            allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
+            requireFullList: ctx.settings.requireFullList,
+          }
+        : null,
     };
   });
 
@@ -200,11 +212,20 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       if (request.query.slot) conditions.push(eq(items.slot, request.query.slot));
       if (request.query.q) conditions.push(or(ilike(items.name, `%${request.query.q}%`))!);
       const rows = await tx
-        .select({ itemId: items.itemId, name: items.name, quality: items.quality, slot: items.slot, inventoryType: items.inventoryType, icon: items.icon, source: items.source })
+        .select({
+          itemId: items.itemId,
+          name: items.name,
+          quality: items.quality,
+          slot: items.slot,
+          inventoryType: items.inventoryType,
+          icon: items.icon,
+          source: items.source,
+          classMask: items.classMask,
+        })
         .from(phaseItems)
         .innerJoin(items, eq(items.itemId, phaseItems.itemId))
         .where(and(...conditions))
-        .limit(50);
+        .limit(300);
       return { items: rows };
     });
   });
