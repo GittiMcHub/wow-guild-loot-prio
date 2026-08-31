@@ -1,13 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api';
+
+interface PhaseSettingsOverride {
+  listSize?: number;
+  twohandConsumesOffhand?: boolean;
+  allowAltOffspecInOffList?: boolean;
+  requireFullList?: boolean;
+}
 
 interface Phase {
   id: string;
   key: string;
   name: string;
   status: 'DRAFT' | 'OPEN' | 'LOCKED' | 'ARCHIVED';
+  itemPoolMode: 'PREDEFINED' | 'OPEN';
+  settingsOverride: PhaseSettingsOverride | null;
 }
 
 interface PhaseItem {
@@ -45,13 +54,56 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [attachError, setAttachError] = useState<string | null>(null);
 
+  const [listSizeEnabled, setListSizeEnabled] = useState(false);
+  const [listSizeValue, setListSizeValue] = useState(20);
+  const [twohandEnabled, setTwohandEnabled] = useState(false);
+  const [twohandValue, setTwohandValue] = useState(false);
+  const [altOffspecEnabled, setAltOffspecEnabled] = useState(false);
+  const [altOffspecValue, setAltOffspecValue] = useState(false);
+  const [requireFullListEnabled, setRequireFullListEnabled] = useState(false);
+  const [requireFullListValue, setRequireFullListValue] = useState(false);
+  const [settingsDraftLoaded, setSettingsDraftLoaded] = useState(false);
+
   const phase = useQuery<Phase>({ queryKey: ['admin-phase', phaseId], queryFn: () => api.get<Phase>(`/phases/${phaseId}`) });
   const items = useQuery<{ items: PhaseItem[] }>({ queryKey: ['admin-phase-items', phaseId], queryFn: () => api.get(`/phases/${phaseId}/items`) });
+
+  useEffect(() => {
+    if (settingsDraftLoaded || !phase.data) return;
+    const override = phase.data.settingsOverride;
+    setListSizeEnabled(override?.listSize !== undefined);
+    setListSizeValue(override?.listSize ?? 20);
+    setTwohandEnabled(override?.twohandConsumesOffhand !== undefined);
+    setTwohandValue(override?.twohandConsumesOffhand ?? false);
+    setAltOffspecEnabled(override?.allowAltOffspecInOffList !== undefined);
+    setAltOffspecValue(override?.allowAltOffspecInOffList ?? false);
+    setRequireFullListEnabled(override?.requireFullList !== undefined);
+    setRequireFullListValue(override?.requireFullList ?? false);
+    setSettingsDraftLoaded(true);
+  }, [phase.data, settingsDraftLoaded]);
 
   const statusMutation = useMutation({
     mutationFn: (status: Phase['status']) => api.patch(`/phases/${phaseId}`, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-phase', phaseId] }),
   });
+
+  const poolModeMutation = useMutation({
+    mutationFn: (itemPoolMode: 'PREDEFINED' | 'OPEN') => api.patch(`/phases/${phaseId}`, { itemPoolMode }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-phase', phaseId] }),
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: (settingsOverride: Phase['settingsOverride']) => api.patch(`/phases/${phaseId}`, { settingsOverride }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-phase', phaseId] }),
+  });
+
+  const saveSettings = () => {
+    const draft: PhaseSettingsOverride = {};
+    if (listSizeEnabled) draft.listSize = listSizeValue;
+    if (twohandEnabled) draft.twohandConsumesOffhand = twohandValue;
+    if (altOffspecEnabled) draft.allowAltOffspecInOffList = altOffspecValue;
+    if (requireFullListEnabled) draft.requireFullList = requireFullListValue;
+    settingsMutation.mutate(Object.keys(draft).length === 0 ? null : draft);
+  };
 
   const fetchMutation = useMutation({
     mutationFn: (itemId: number) => api.post<FetchedItem>(`/phases/${phaseId}/items/fetch`, { itemId }),
@@ -111,6 +163,72 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
       </header>
 
       <div className="mb-4 rounded border border-zinc-800 bg-zinc-900 p-4">
+        <h2 className="mb-2 font-medium text-zinc-300">Item pool</h2>
+        <div className="flex gap-2">
+          {(['PREDEFINED', 'OPEN'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => poolModeMutation.mutate(mode)}
+              className={`rounded px-3 py-1.5 text-sm ${phase.data.itemPoolMode === mode ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
+            >
+              {mode === 'PREDEFINED' ? 'Predefined catalog' : 'Open (players enter item IDs)'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4 rounded border border-zinc-800 bg-zinc-900 p-4">
+        <h2 className="mb-2 font-medium text-zinc-300">Settings override</h2>
+        <p className="mb-3 text-sm text-zinc-500">Override the guild's default settings for this phase only. Unchecked fields inherit the guild default.</p>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={listSizeEnabled} onChange={(e) => setListSizeEnabled(e.target.checked)} />
+            <span className="w-40 text-zinc-400">List size</span>
+            <input
+              type="number"
+              min={1}
+              max={40}
+              value={listSizeValue}
+              onChange={(e) => setListSizeValue(Number(e.target.value))}
+              disabled={!listSizeEnabled}
+              className="input max-w-[6rem] disabled:opacity-50"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={twohandEnabled} onChange={(e) => setTwohandEnabled(e.target.checked)} />
+            <span className="w-40 text-zinc-400">Twohand consumes offhand</span>
+            <input type="checkbox" checked={twohandValue} onChange={(e) => setTwohandValue(e.target.checked)} disabled={!twohandEnabled} />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={altOffspecEnabled} onChange={(e) => setAltOffspecEnabled(e.target.checked)} />
+            <span className="w-40 text-zinc-400">Allow alt offspec in off-list</span>
+            <input type="checkbox" checked={altOffspecValue} onChange={(e) => setAltOffspecValue(e.target.checked)} disabled={!altOffspecEnabled} />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={requireFullListEnabled} onChange={(e) => setRequireFullListEnabled(e.target.checked)} />
+            <span className="w-40 text-zinc-400">Require full list</span>
+            <input type="checkbox" checked={requireFullListValue} onChange={(e) => setRequireFullListValue(e.target.checked)} disabled={!requireFullListEnabled} />
+          </label>
+        </div>
+        <button
+          onClick={saveSettings}
+          disabled={settingsMutation.isPending}
+          className="mt-3 rounded bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+        >
+          {settingsMutation.isPending ? 'Saving…' : 'Save settings'}
+        </button>
+        {settingsMutation.isSuccess && <p className="mt-2 text-sm text-emerald-400">Saved.</p>}
+        {settingsMutation.isError && <p className="mt-2 text-sm text-red-400">Failed to save settings.</p>}
+      </div>
+
+      {phase.data.itemPoolMode === 'OPEN' && (
+        <p className="mb-4 text-sm text-zinc-500">
+          This phase is in Open mode — players enter item IDs directly on their own priority list. There's no catalog to curate here.
+        </p>
+      )}
+
+      {phase.data.itemPoolMode === 'PREDEFINED' && (
+      <div className="mb-4 rounded border border-zinc-800 bg-zinc-900 p-4">
         <h2 className="mb-2 font-medium text-zinc-300">Add item</h2>
         <div className="flex gap-2">
           <input
@@ -160,6 +278,7 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
           </div>
         )}
       </div>
+      )}
 
       <h2 className="mb-2 font-medium text-zinc-300">Items in this phase</h2>
       <ul className="space-y-1">
