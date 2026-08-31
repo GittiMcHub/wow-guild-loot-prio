@@ -43,6 +43,7 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   const [itemIdInput, setItemIdInput] = useState('');
   const [preview, setPreview] = useState<FetchedItem | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   const phase = useQuery<Phase>({ queryKey: ['admin-phase', phaseId], queryFn: () => api.get<Phase>(`/phases/${phaseId}`) });
   const items = useQuery<{ items: PhaseItem[] }>({ queryKey: ['admin-phase-items', phaseId], queryFn: () => api.get(`/phases/${phaseId}/items`) });
@@ -67,9 +68,13 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   const attachMutation = useMutation({
     mutationFn: (item: FetchedItem) => api.post('/phases/' + phaseId + '/items', item),
     onSuccess: () => {
+      setAttachError(null);
       setPreview(null);
       setItemIdInput('');
       queryClient.invalidateQueries({ queryKey: ['admin-phase-items', phaseId] });
+    },
+    onError: (err) => {
+      setAttachError(err instanceof ApiError ? err.message : 'Attach failed.');
     },
   });
 
@@ -116,13 +121,14 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
           />
           <button
             onClick={() => fetchMutation.mutate(Number(itemIdInput))}
-            disabled={!itemIdInput || fetchMutation.isPending}
+            disabled={!/^\d+$/.test(itemIdInput) || fetchMutation.isPending}
             className="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700 disabled:opacity-50"
           >
             {fetchMutation.isPending ? 'Fetching…' : 'Fetch from Wowhead'}
           </button>
         </div>
         {fetchError && <p className="mt-2 text-sm text-amber-400">{fetchError} — enter details manually below.</p>}
+        {attachError && <p className="mt-2 text-sm text-red-400">{attachError}</p>}
 
         {preview && (
           <div className="mt-3 space-y-2 rounded border border-zinc-800 p-3">

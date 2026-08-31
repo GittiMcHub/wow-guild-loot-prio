@@ -98,4 +98,40 @@ describe('POST /phases/:id/items and DELETE /phases/:id/items/:itemId', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('re-attaching a soft-removed item makes it visible again', async () => {
+    // From the previous tests, item 999001 was attached and then soft-removed
+    // (enabled = false). Re-attaching it must flip enabled back to true, not
+    // silently no-op via onConflictDoNothing.
+    const res = await app.fastify.inject({
+      method: 'POST',
+      url: `/api/phases/${phaseId}/items`,
+      cookies: { glps_admin_at: adminCookie },
+      payload: { itemId: 999001, name: 'Test Helm', quality: 4, slot: 'HEAD', inventoryType: 'HEAD', icon: null },
+    });
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
+
+    const [phaseItemRow] = await withTenant(app.db, guildId, (tx) =>
+      tx.select().from(phaseItems).where(and(eq(phaseItems.phaseId, phaseId), eq(phaseItems.itemId, 999001))),
+    );
+    expect(phaseItemRow?.enabled).toBe(true);
+
+    const list = await app.fastify.inject({
+      method: 'GET',
+      url: `/api/phases/${phaseId}/items`,
+      cookies: { glps_admin_at: adminCookie },
+    });
+    expect(list.json().items.find((i: { itemId: number }) => i.itemId === 999001)).toBeDefined();
+  });
+
+  it('returns 404, not 500, when attaching to a nonexistent phase', async () => {
+    const bogusPhaseId = uuidv7();
+    const res = await app.fastify.inject({
+      method: 'POST',
+      url: `/api/phases/${bogusPhaseId}/items`,
+      cookies: { glps_admin_at: adminCookie },
+      payload: { itemId: 999002, name: 'Test Ring', quality: 3, slot: 'FINGER', inventoryType: 'FINGER', icon: null },
+    });
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(404);
+  });
 });

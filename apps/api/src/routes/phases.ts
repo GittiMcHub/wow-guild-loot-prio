@@ -185,7 +185,10 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
       if (!body.success) return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item payload.', body.error.flatten()));
       const guildId = request.tenant!.guildId;
 
-      await withRequestTenant(db, request, async (tx) => {
+      const result = await withRequestTenant(db, request, async (tx) => {
+        const [phase] = await tx.select().from(phases).where(eq(phases.id, request.params.id));
+        if (!phase) return null;
+
         await tx
           .insert(items)
           .values({
@@ -203,9 +206,14 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
         await tx
           .insert(phaseItems)
           .values({ guildId, phaseId: request.params.id, itemId: body.data.itemId, enabled: true })
-          .onConflictDoNothing();
+          .onConflictDoUpdate({
+            target: [phaseItems.phaseId, phaseItems.itemId],
+            set: { enabled: true },
+          });
+        return { ok: true };
       });
-      return { ok: true };
+      if (!result) return sendError(reply, notFound());
+      return result;
     },
   );
 
