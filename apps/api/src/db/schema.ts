@@ -86,6 +86,8 @@ export const phases = pgTable(
     gameVersion: text('game_version').notNull(),
     status: text('status').notNull(), // DRAFT | OPEN | LOCKED | ARCHIVED
     submissionsCloseAt: timestamp('submissions_close_at', { withTimezone: true }),
+    itemPoolMode: text('item_pool_mode').notNull().default('PREDEFINED'),
+    settingsOverride: jsonb('settings_override'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('phases_guild_key').on(t.guildId, t.key), unique('phases_id_guild').on(t.id, t.guildId)],
