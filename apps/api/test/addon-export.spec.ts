@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { loadCatalog } from '@glps/item-data';
 import { zAddonExport } from '@glps/contracts';
 import { withTenant } from '../src/db/client.js';
-import { characters, guilds, guildSettings, items, phaseItems, phases, players, submissionEntries, submissions } from '../src/db/schema.js';
+import { awards, characters, guilds, guildSettings, items, phaseItems, phases, players, submissionEntries, submissions } from '../src/db/schema.js';
 import { uuidv7 } from '../src/db/uuid.js';
 import { buildAddonExport } from '../src/services/addon-export.js';
 import { serializeAddonExportToLua } from '../src/services/lua-serializer.js';
@@ -71,6 +71,82 @@ describe('buildAddonExport', () => {
       const claims = tree.items[String(neckItem.itemId)]!;
       expect(claims).toHaveLength(2);
       expect(claims.every((c) => c.tie === true)).toBe(true);
+    });
+
+    await deleteGuild(db, guildId);
+  });
+
+  it('reshapes a stored award explanation into tree.awarded, and excludes reverted awards', async () => {
+    const guildId = uuidv7();
+    const phaseId = uuidv7();
+    await db.insert(guilds).values({ id: guildId, slug: `addon-export-awarded-${Date.now()}`, name: 'Addon Export Awarded Test', gameVersion: 'classic-era', status: 'ACTIVE' });
+    await db.insert(guildSettings).values({ guildId });
+    await db.insert(items).values(catalog.map((i) => ({ ...i, phaseKey: 'P3' }))).onConflictDoNothing({ target: items.itemId });
+
+    await withTenant(db, guildId, async (tx) => {
+      await tx.insert(phases).values({ id: phaseId, guildId, key: 'P3', name: 'Phase 3', gameVersion: 'classic-era', status: 'OPEN' });
+      await tx.insert(phaseItems).values({ guildId, phaseId, itemId: neckItem.itemId, enabled: true });
+
+      const playerId = uuidv7();
+      await tx.insert(players).values({ id: playerId, guildId, phaseId, displayName: 'Thrall', discordTag: 'thrall#1234' });
+      const characterId = uuidv7();
+      await tx.insert(characters).values({ id: characterId, guildId, playerId, name: 'Thrall', class: 'WARRIOR', mainSpec: 'FURY', isMainCharacter: true, slotIndex: 1 });
+      const submissionId = uuidv7();
+      await tx.insert(submissions).values({ id: submissionId, guildId, phaseId, playerId, status: 'SUBMITTED', version: 1 });
+      const entryId = uuidv7();
+      await tx.insert(submissionEntries).values({ id: entryId, guildId, submissionId, characterId, list: 'MAIN', rank: 1, slot: 'NECK', itemId: neckItem.itemId, spec: 'FURY', fulfilledAt: new Date() });
+
+      // Shape matches DecisionExplanation (packages/core/src/types.ts), as produced by
+      // explainDecision() in packages/core/src/explain.ts.
+      const explanation = {
+        itemId: neckItem.itemId,
+        winCondition: 'SOLE_CLAIM',
+        winner: { character: 'Thrall', player: 'thrall#1234', list: 'MAIN', rank: 1, bisCount: 0 },
+        contenders: [],
+        config: { equalDistribution: 'PHASE', bisCountScope: 'PLAYER', weightOff: 0 },
+        summary: 'Thrall — MAIN #1. Only listed claim.',
+        decidedAt: new Date().toISOString(),
+      };
+
+      await tx.insert(awards).values({
+        id: uuidv7(),
+        guildId,
+        phaseId,
+        itemId: neckItem.itemId,
+        entryId,
+        characterId,
+        awardType: 'PRIORITY',
+        winCondition: 'SOLE_CLAIM',
+        explanation,
+        snapshot: {},
+        revertedAt: null,
+      });
+
+      // A reverted award for the same item must never appear in the export.
+      await tx.insert(awards).values({
+        id: uuidv7(),
+        guildId,
+        phaseId,
+        itemId: neckItem.itemId,
+        entryId: null,
+        characterId: null,
+        awardType: 'PRIORITY',
+        winCondition: 'SOLE_CLAIM',
+        explanation,
+        snapshot: {},
+        revertedAt: new Date(),
+      });
+
+      const tree = await buildAddonExport(tx, guildId, phaseId);
+      expect(() => zAddonExport.parse(tree)).not.toThrow();
+      expect(tree.awarded).toHaveLength(1);
+      expect(tree.awarded[0]).toMatchObject({
+        item: neckItem.itemId,
+        c: 'Thrall',
+        win: 'SOLE_CLAIM',
+        why: 'Thrall — MAIN #1. Only listed claim.',
+      });
+      expect(tree.awarded[0]!.det.w).toMatchObject({ c: 'Thrall', t: 'MAIN', r: 1, b: 0 });
     });
 
     await deleteGuild(db, guildId);
