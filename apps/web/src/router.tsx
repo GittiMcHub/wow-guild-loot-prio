@@ -1,6 +1,8 @@
 import { createRootRoute, createRoute, createRouter, Outlet, useNavigate } from '@tanstack/react-router';
 import { AdminDashboardPage } from './routes/admin/dashboard';
 import { AdminLoginPage } from './routes/admin/login';
+import { AdminMatrixPage } from './routes/admin/matrix';
+import { AdminResolverPage } from './routes/admin/resolver';
 import { HomePage } from './routes/home';
 import { InvitePage } from './routes/invite';
 import { ListBuilderPage } from './routes/list-builder';
@@ -30,7 +32,35 @@ function AdminLoginRouteComponent() {
 
 const adminDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminDashboardPage });
 
-const routeTree = rootRoute.addChildren([indexRoute, inviteRoute, myListRoute, adminLoginRoute, adminDashboardRoute]);
+const adminMatrixRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/phases/$phaseId/matrix',
+  component: AdminMatrixRouteComponent,
+});
+function AdminMatrixRouteComponent() {
+  const { phaseId } = adminMatrixRoute.useParams();
+  return <AdminMatrixPage phaseId={phaseId} />;
+}
+
+const adminResolverRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/phases/$phaseId/resolve',
+  component: AdminResolverRouteComponent,
+});
+function AdminResolverRouteComponent() {
+  const { phaseId } = adminResolverRoute.useParams();
+  return <AdminResolverPage phaseId={phaseId} />;
+}
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  inviteRoute,
+  myListRoute,
+  adminLoginRoute,
+  adminDashboardRoute,
+  adminMatrixRoute,
+  adminResolverRoute,
+]);
 
 export const router = createRouter({ routeTree });
 

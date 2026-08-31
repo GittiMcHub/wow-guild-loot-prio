@@ -19,8 +19,9 @@ against a real Postgres instance:
 | DB schema, RLS (§3A.3), composite tenant FKs, `glps_migrate`/`glps_app` roles | **Done.** Verified live: RLS fails closed, pooled-connection isolation, cascade deletion, cross-guild uniqueness collisions. |
 | Auth: admin JWT (`gid` claim), invite/player bearer tokens, tenant hook | **Done.** |
 | Core API: invite claim, submission CRUD/submit, phase CRUD, admin matrix, drop resolver, rolls, awards, revert | **Done.** Exercises the §2.4 worked example and the tie→roll→award→revert flow through real HTTP requests. |
-| Web SPA | **Scaffold only.** Invite claim, read-only player list, admin login/dashboard work end-to-end. The full §11 UI (drag-and-drop list builder, admin matrix/drop-resolver console, guild-wide read views) is not built. |
-| Addon export/import (§9), instance-admin, raid-session/attendance CRUD, CSV/JSON exports | **Not built.** `packages/contracts` already models the wire formats (`addon.ts`); `docs/ADDON_FORMAT.md` documents the intended shape. |
+| Web SPA — invite claim, player list builder (§11.2), admin matrix + drop resolver (§11.3) | **Done.** Drag-and-drop priority ladder (`@dnd-kit`, keyboard-operable), live client-side validation via `@glps/core` itself, matrix in all 3 views, resolver with roll/award/override/disenchant. Verified in a real Chromium browser against the real API — see Testing below. |
+| Guild-wide read view (§11.2b: `/b/:token/guild` lists/standings/loot feed), instance-admin screen, raid-session/attendance CRUD UI | **Not built.** |
+| Addon export/import (§9), CSV/JSON exports | **Not built.** `packages/contracts` already models the wire formats (`addon.ts`); `docs/ADDON_FORMAT.md` documents the intended shape. |
 | Docker Compose / Dockerfiles | **Written, `docker compose config` validated.** Not run end-to-end — this dev environment has no Docker daemon available. |
 
 See `git log` for what each milestone actually delivered and how it was verified.
@@ -75,6 +76,13 @@ pnpm -r run test        # all packages
 for the defaults it falls back to). It runs real migrations, real RLS
 policies, and real HTTP requests via Fastify's `.inject()` — nothing here is
 mocked at the database boundary.
+
+`apps/web`'s Playwright suite (`pnpm --filter @glps/web run e2e`) drives a
+real Chromium browser against a running API + Postgres (start the API with
+`pnpm --filter @glps/api run dev` and the web dev server with
+`pnpm --filter @glps/web run dev` first). `e2e/claim-and-submit.spec.ts` is
+the M4-required flow: claim an invite, build both lists, submit, verify a
+second submit is rejected as `SUBMISSION_LOCKED`.
 
 ## Key design notes worth knowing before extending this
 

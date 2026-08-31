@@ -1,9 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ilike } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import type { AppDb } from '../db/client.js';
 import { withRequestTenant } from '../db/request-tx.js';
-import { characters, players, submissionEntries, submissions, phases } from '../db/schema.js';
+import { characters, items, phaseItems, players, submissionEntries, submissions, phases } from '../db/schema.js';
 import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
 
@@ -147,6 +147,24 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
     },
   );
 
+  fastify.get<{ Params: { id: string }; Querystring: { q?: string } }>(
+    '/phases/:id/items',
+    { config: { tenant: 'admin' } },
+    async (request) => {
+      return withRequestTenant(db, request, async (tx) => {
+        const conditions = [eq(phaseItems.phaseId, request.params.id), eq(phaseItems.enabled, true)];
+        if (request.query.q) conditions.push(ilike(items.name, `%${request.query.q}%`));
+        const rows = await tx
+          .select({ itemId: items.itemId, name: items.name, quality: items.quality, slot: items.slot, source: items.source })
+          .from(phaseItems)
+          .innerJoin(items, eq(items.itemId, phaseItems.itemId))
+          .where(and(...conditions))
+          .limit(300);
+        return { items: rows };
+      });
+    },
+  );
+
   fastify.get<{ Params: { id: string }; Querystring: { view?: string } }>(
     '/phases/:id/matrix',
     { config: { tenant: 'admin' } },
@@ -162,12 +180,15 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
             rank: submissionEntries.rank,
             slot: submissionEntries.slot,
             itemId: submissionEntries.itemId,
+            itemName: items.name,
+            itemQuality: items.quality,
             fulfilledAt: submissionEntries.fulfilledAt,
           })
           .from(submissionEntries)
           .innerJoin(submissions, eq(submissions.id, submissionEntries.submissionId))
           .innerJoin(players, eq(players.id, submissions.playerId))
           .innerJoin(characters, eq(characters.id, submissionEntries.characterId))
+          .innerJoin(items, eq(items.itemId, submissionEntries.itemId))
           .where(and(eq(submissions.phaseId, request.params.id), eq(submissions.status, 'SUBMITTED')));
 
         const view = request.query.view ?? 'slot';
