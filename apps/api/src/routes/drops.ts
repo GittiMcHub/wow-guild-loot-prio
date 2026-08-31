@@ -1,38 +1,15 @@
 import { randomInt } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
-import { explainDecision, resolveDrop, type ResolveOptions, type RollRecord } from '@glps/core';
+import { explainDecision, resolveDrop, type RollRecord } from '@glps/core';
 import { zCreateAwardRequest, zCreateRollRequest, zResolveDropRequest } from '@glps/contracts';
 import type { AppDb, AppTx } from '../db/client.js';
 import { withRequestTenant } from '../db/request-tx.js';
-import { attendance, awards, characters, guildSettings, rolls, submissionEntries } from '../db/schema.js';
+import { attendance, awards, characters, rolls, submissionEntries } from '../db/schema.js';
 import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
-import { computeBisCounts } from '../services/bis-count.js';
 import { loadClaimsForItem } from '../services/claims.js';
-
-async function loadResolveOptions(tx: AppTx, guildId: string, phaseId: string, raidSessionId?: string) {
-  const [settings] = await tx.select().from(guildSettings).where(eq(guildSettings.guildId, guildId));
-  if (!settings) throw notFound('Guild settings not found.');
-  const bisCounts = await computeBisCounts(
-    tx,
-    phaseId,
-    {
-      mode: settings.equalDistributionMode as 'OFF' | 'PHASE' | 'SESSION',
-      scope: settings.bisCountScope as 'PLAYER' | 'CHARACTER',
-      weightMain: Number(settings.bisCountWeightMain),
-      weightOff: Number(settings.bisCountWeightOff),
-      weightOverride: Number(settings.bisCountWeightOverride),
-    },
-    raidSessionId,
-  );
-  const options: ResolveOptions = {
-    equalDistributionMode: settings.equalDistributionMode as ResolveOptions['equalDistributionMode'],
-    bisCountScope: settings.bisCountScope as ResolveOptions['bisCountScope'],
-    bisCounts,
-  };
-  return { options, weightOff: Number(settings.bisCountWeightOff) };
-}
+import { loadResolveOptions } from '../services/resolve-options.js';
 
 async function presentCharacterIdsFor(tx: AppTx, guildId: string, explicit?: string[], raidSessionId?: string): Promise<Set<string>> {
   if (explicit && explicit.length > 0) return new Set(explicit);
