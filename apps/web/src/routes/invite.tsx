@@ -10,6 +10,13 @@ interface InviteInfo {
 
 const CLASSES = ['WARRIOR', 'PALADIN', 'HUNTER', 'ROGUE', 'PRIEST', 'SHAMAN', 'MAGE', 'WARLOCK', 'DRUID'];
 
+interface CharacterDraft {
+  name: string;
+  class: string;
+  mainSpec: string;
+  offSpec: string;
+}
+
 export function InvitePage({ token }: { token: string }) {
   const { data, isLoading, error } = useQuery<InviteInfo>({
     queryKey: ['invite', token],
@@ -17,10 +24,8 @@ export function InvitePage({ token }: { token: string }) {
   });
 
   const [displayName, setDisplayName] = useState('');
-  const [characterName, setCharacterName] = useState('');
-  const [charClass, setCharClass] = useState(CLASSES[0]!);
-  const [mainSpec, setMainSpec] = useState('');
-  const [offSpec, setOffSpec] = useState('');
+  const [chars, setChars] = useState<CharacterDraft[]>([{ name: '', class: CLASSES[0]!, mainSpec: '', offSpec: '' }]);
+  const [primaryIndex, setPrimaryIndex] = useState(0);
   const [result, setResult] = useState<{ playerToken: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -58,7 +63,14 @@ export function InvitePage({ token }: { token: string }) {
     try {
       const res = await api.post<{ playerToken: string }>(`/invites/${token}/claim`, {
         displayName,
-        characters: [{ name: characterName, class: charClass, mainSpec, offSpec, isMainCharacter: true, slotIndex: 1 }],
+        characters: chars.map((c, i) => ({
+          name: c.name,
+          class: c.class,
+          mainSpec: c.mainSpec,
+          offSpec: c.offSpec,
+          isMainCharacter: i === primaryIndex,
+          slotIndex: i + 1,
+        })),
       });
       setResult(res);
     } catch (err) {
@@ -76,24 +88,76 @@ export function InvitePage({ token }: { token: string }) {
         <Field label="Discord / display name">
           <input required value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="input" />
         </Field>
-        <Field label="Character name">
-          <input required value={characterName} onChange={(e) => setCharacterName(e.target.value)} className="input" />
-        </Field>
-        <Field label="Class">
-          <select value={charClass} onChange={(e) => setCharClass(e.target.value)} className="input">
-            {CLASSES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Main spec">
-          <input required value={mainSpec} onChange={(e) => setMainSpec(e.target.value)} className="input" />
-        </Field>
-        <Field label="Off spec">
-          <input value={offSpec} onChange={(e) => setOffSpec(e.target.value)} className="input" />
-        </Field>
+        {chars.map((char, i) => (
+          <fieldset key={i} className="space-y-3 rounded border border-zinc-800 p-3">
+            <div className="flex items-center justify-between">
+              <legend className="text-sm font-medium text-zinc-300">Character {i + 1}</legend>
+              {chars.length > 1 && (
+                <label className="flex items-center gap-1 text-xs text-zinc-400">
+                  <input type="radio" checked={primaryIndex === i} onChange={() => setPrimaryIndex(i)} />
+                  Primary
+                </label>
+              )}
+            </div>
+            <Field label="Character name">
+              <input
+                required
+                value={char.name}
+                onChange={(e) => setChars((cs) => cs.map((c, j) => (j === i ? { ...c, name: e.target.value } : c)))}
+                className="input"
+              />
+            </Field>
+            <Field label="Class">
+              <select
+                value={char.class}
+                onChange={(e) => setChars((cs) => cs.map((c, j) => (j === i ? { ...c, class: e.target.value } : c)))}
+                className="input"
+              >
+                {CLASSES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Main spec">
+              <input
+                required
+                value={char.mainSpec}
+                onChange={(e) => setChars((cs) => cs.map((c, j) => (j === i ? { ...c, mainSpec: e.target.value } : c)))}
+                className="input"
+              />
+            </Field>
+            <Field label="Off spec">
+              <input
+                value={char.offSpec}
+                onChange={(e) => setChars((cs) => cs.map((c, j) => (j === i ? { ...c, offSpec: e.target.value } : c)))}
+                className="input"
+              />
+            </Field>
+            {chars.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setChars((cs) => cs.filter((_, j) => j !== i));
+                  if (primaryIndex >= i) setPrimaryIndex(0);
+                }}
+                className="text-xs text-red-400 hover:text-red-300"
+              >
+                Remove
+              </button>
+            )}
+          </fieldset>
+        ))}
+        {chars.length < 2 && (
+          <button
+            type="button"
+            onClick={() => setChars((cs) => [...cs, { name: '', class: CLASSES[0]!, mainSpec: '', offSpec: '' }])}
+            className="text-sm text-emerald-400 hover:text-emerald-300"
+          >
+            + Add a second character
+          </button>
+        )}
         {submitError && <p className="text-sm text-red-400">{submitError}</p>}
         <button type="submit" className="w-full rounded bg-emerald-600 py-2 font-medium hover:bg-emerald-500">
           Join
