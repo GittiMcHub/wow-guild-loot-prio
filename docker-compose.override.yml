@@ -8,6 +8,9 @@ services:
       - .:/repo
       - /repo/node_modules
       - /repo/apps/api/node_modules
+      - /repo/packages/core/node_modules
+      - /repo/packages/contracts/node_modules
+      - /repo/packages/item-data/node_modules
 
   api:
     build: { target: deps }
@@ -18,17 +21,24 @@ services:
       - .:/repo
       - /repo/node_modules
       - /repo/apps/api/node_modules
+      - /repo/packages/core/node_modules
+      - /repo/packages/contracts/node_modules
+      - /repo/packages/item-data/node_modules
     ports: ["3000:3000"]
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile, target: deps }
-    command: ["pnpm", "--filter", "@glps/web", "run", "dev", "--", "--host"]
+    command: ["pnpm", "--filter", "@glps/web", "run", "dev", "--host"]
     environment:
       VITE_API_BASE: /api
+      VITE_API_PROXY_TARGET: http://api:3000
     volumes:
       - .:/repo
       - /repo/node_modules
       - /repo/apps/web/node_modules
+      - /repo/packages/core/node_modules
+      - /repo/packages/contracts/node_modules
+      - /repo/packages/item-data/node_modules
     # Overrides (replaces, doesn't add to) the base file's 8080:80 nginx
     # mapping — in dev the Vite dev server on 5173 is the front door.
     ports: !override

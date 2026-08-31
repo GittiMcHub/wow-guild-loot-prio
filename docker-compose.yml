@@ -15,7 +15,7 @@ services:
     build: { context: ., dockerfile: apps/api/Dockerfile, target: runner }
     command: ["node", "dist/db/migrate.js"]
     environment:
-      DATABASE_URL: "${DATABASE_URL:?set me}"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-glps}:${POSTGRES_PASSWORD:?set me}@db:5432/${POSTGRES_DB:-glps}"
       MIGRATE_DB_PASSWORD: "${MIGRATE_DB_PASSWORD:?set me}"
       APP_DB_PASSWORD: "${APP_DB_PASSWORD:?set me}"
       SEED_DEMO: "${SEED_DEMO:-false}"
@@ -26,7 +26,8 @@ services:
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile, target: runner }
     environment:
-      DATABASE_URL_APP: "${DATABASE_URL_APP:?set me}" # connects as glps_app — RLS enforced, NOT the table owner
+      # connects as glps_app — RLS enforced, NOT the table owner
+      DATABASE_URL_APP: "postgres://glps_app:${APP_DB_PASSWORD:?set me}@db:5432/${POSTGRES_DB:-glps}"
       JWT_SECRET: "${JWT_SECRET:?set me}"
       TOKEN_PEPPER: "${TOKEN_PEPPER:?set me}"
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8080}"

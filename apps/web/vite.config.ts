@@ -6,7 +6,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:3000',
+      // In Docker Compose the api runs in a separate container, reachable
+      // only by its service name — 'localhost' would mean this container.
+      '/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3000',
     },
   },
 });
