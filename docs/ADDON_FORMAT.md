@@ -1,10 +1,10 @@
 # GLPS ↔ addon data contract
 
 > **Status:** this document specifies the wire format. The Zod schemas that
-> validate it already exist (`packages/contracts/src/addon.ts`), but the
-> `GET /phases/:id/export` and `POST /phases/:id/import` HTTP routes are not
-> implemented yet — see the repo README's status table. This is the contract
-> those routes should implement against.
+> validate it already exist (`packages/contracts/src/addon.ts`). The
+> `GET /phases/:id/export` route (Lua and JSON formats) is now implemented;
+> `POST /phases/:id/import` is not implemented yet — see the repo README's
+> status table. This is the contract that route should implement against.
 
 The in-game addon is a separate project. GLPS owns only this data contract.
 The critical design constraint: the addon must answer "who wants this item?"
@@ -143,7 +143,7 @@ Behaviour the route must implement:
 | `GLPS1:` codec (encode/decode) | `packages/core/src/codec.ts` | Done, tested |
 | Frozen one-line decision summaries (the `why` field) | `packages/core/src/explain.ts` | Done, tested |
 | Zod schemas for the export tree and import payload | `packages/contracts/src/addon.ts` | Done |
-| Lua serializer | — | Not started |
-| `GET /phases/:id/export` route | — | Not started |
+| Lua serializer | `apps/api/src/services/lua-serializer.ts` | Done, tested |
+| `GET /phases/:id/export` route | `apps/api/src/routes/phases.ts` | Done, tested |
 | `POST /phases/:id/import` route (dry-run + commit + reconciliation) | — | Not started |
 | CSV loot-log parser | — | Not started (the *catalog* CSV importer at `packages/item-data/src/csv.ts` is unrelated — that's for item metadata, not loot logs) |

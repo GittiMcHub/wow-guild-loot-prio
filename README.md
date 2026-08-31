@@ -21,7 +21,7 @@ against a real Postgres instance:
 | Core API: invite claim, submission CRUD/submit, phase CRUD, admin matrix, drop resolver, rolls, awards, revert | **Done.** Exercises the §2.4 worked example and the tie→roll→award→revert flow through real HTTP requests. |
 | Web SPA — invite claim, player list builder (§11.2), admin matrix + drop resolver (§11.3) | **Done.** Drag-and-drop priority ladder (`@dnd-kit`, keyboard-operable), live client-side validation via `@glps/core` itself, matrix in all 3 views, resolver with roll/award/override/disenchant. Verified in a real Chromium browser against the real API — see Testing below. |
 | Guild-wide read view (§11.2b: `/b/:token/guild` lists/standings/loot feed), instance-admin screen, raid-session/attendance CRUD UI | **Not built.** |
-| Addon export/import (§9), CSV/JSON exports | **Not built.** `packages/contracts` already models the wire formats (`addon.ts`); `docs/ADDON_FORMAT.md` documents the intended shape. |
+| Addon export/import (§9), CSV/JSON exports | **Export implemented** (`GET /phases/:id/export`, Lua and JSON formats). **Import not built.** `packages/contracts` already models the wire formats (`addon.ts`); `docs/ADDON_FORMAT.md` documents the full contract. |
 | Docker Compose / Dockerfiles | **Written, `docker compose config` validated.** Not run end-to-end — this dev environment has no Docker daemon available. |
 
 See `git log` for what each milestone actually delivered and how it was verified.
@@ -35,7 +35,8 @@ docker compose up --build
 
 This brings up Postgres, runs migrations (bootstrapping the `glps_migrate`
 owner and `glps_app` RLS-bound roles), and starts the API and web SPA. Set
-`SEED_DEMO=true` in `.env` to also seed two demo guilds — credentials are
+`SEED_DEMO=true` in `.env` to also seed three demo guilds (Nightfall,
+Ironforge Guard, Sunstriders) — credentials are
 written to the `migrate` service's logs, never elsewhere.
 
 Without Docker, against a local Postgres 16:

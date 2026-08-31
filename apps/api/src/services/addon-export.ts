@@ -1,11 +1,24 @@
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { resolveDrop, type ClaimInput } from '@glps/core';
-import type { AddonAward, AddonClaim, AddonExport } from '@glps/contracts';
+import { zAddonExport, type AddonAward, type AddonClaim, type AddonExport } from '@glps/contracts';
 import type { AppTx } from '../db/client.js';
-import { awards, characters, guildSettings, guilds, players } from '../db/schema.js';
+import { awards, characters, guildSettings, guilds, phases, players } from '../db/schema.js';
 import { loadClaimsForPhase } from './claims.js';
 import { loadResolveOptions } from './resolve-options.js';
+
+/** Recursively sorts object keys so JSON.stringify produces canonical, checksum-stable output. */
+function sortKeysDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value !== null && typeof value === 'object') {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      sorted[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
+    }
+    return sorted;
+  }
+  return value;
+}
 
 /**
  * Assembles the addon export tree (docs/ADDON_FORMAT.md) — a pre-computed,
@@ -20,6 +33,9 @@ export async function buildAddonExport(tx: AppTx, guildId: string, phaseId: stri
   const [settings] = await tx.select().from(guildSettings).where(eq(guildSettings.guildId, guildId));
   if (!settings) throw new Error(`Guild settings for ${guildId} not found.`);
 
+  const [phase] = await tx.select().from(phases).where(eq(phases.id, phaseId));
+  if (!phase) throw new Error(`Phase ${phaseId} not found.`);
+
   const { options, weightOff } = await loadResolveOptions(tx, guildId, phaseId);
 
   // ---- players map ----
@@ -32,20 +48,32 @@ export async function buildAddonExport(tx: AppTx, guildId: string, phaseId: stri
     charactersByPlayer.set(c.playerId, list);
   }
 
-  const playersOut: AddonExport['players'] = {};
+  const playerEntries: Array<[string, AddonExport['players'][string]]> = [];
   for (const p of playerRows) {
     const chars = charactersByPlayer.get(p.id) ?? [];
     const mainChar = chars.find((c) => c.isMainCharacter) ?? chars[0];
     if (!mainChar) continue;
-    playersOut[mainChar.name] = {
-      class: mainChar.class,
-      mainSpec: mainChar.mainSpec,
-      offSpec: mainChar.offSpec ?? undefined,
-      isMain: true,
-      player: p.discordTag ?? p.displayName,
-      alts: chars.filter((c) => c.id !== mainChar.id).map((c) => c.name),
-    };
+    playerEntries.push([
+      mainChar.name,
+      {
+        class: mainChar.class,
+        mainSpec: mainChar.mainSpec,
+        offSpec: mainChar.offSpec ?? undefined,
+        isMain: true,
+        player: p.discordTag ?? p.displayName,
+        alts: chars.filter((c) => c.id !== mainChar.id).map((c) => c.name),
+      },
+    ]);
   }
+  playerEntries.sort(([a], [b]) => a.localeCompare(b));
+  const playersOut: AddonExport['players'] = Object.fromEntries(playerEntries);
+
+  // Lookup used to remap bisCounts' internal UUID keys to the identifier the
+  // rest of the tree exposes (docs/ADDON_FORMAT.md: keyed like each claim's `p`).
+  const playerIdentifierById = new Map(playerRows.map((p) => [p.id, p.discordTag ?? p.displayName]));
+  const characterNameById = new Map(characterRows.map((c) => [c.id, c.name]));
+  const bisCountKeyFor = (key: string): string =>
+    (settings.bisCountScope === 'CHARACTER' ? characterNameById.get(key) : playerIdentifierById.get(key)) ?? key;
 
   // ---- items: claim index, one resolveDrop() per item ----
   const claimsByItem = await loadClaimsForPhase(tx, phaseId);
@@ -96,19 +124,24 @@ export async function buildAddonExport(tx: AppTx, guildId: string, phaseId: stri
             r: explanation.winner?.rank ?? 0,
             b: explanation.winner?.bisCount ?? 0,
           },
-          o: explanation.contenders.map((con) => ({ c: con.character, t: con.list, r: con.rank, b: con.bisCount, roll: con.roll, out: con.outcome })),
+          o: (explanation.contenders ?? []).map((con) => ({ c: con.character, t: con.list, r: con.rank, b: con.bisCount, roll: con.roll, out: con.outcome })),
         },
       };
     });
+  awardedOut.sort((a, b) => a.at - b.at);
 
-  // ---- bisCounts ----
-  const bisCounts = options.bisCounts;
+  // ---- bisCounts: remap internal UUID keys to the `p`-identifier the rest of the tree uses ----
+  const bisCountEntries = Object.entries(options.bisCounts).map(
+    ([key, count]) => [bisCountKeyFor(key), count] as [string, number],
+  );
+  bisCountEntries.sort(([a], [b]) => a.localeCompare(b));
+  const bisCounts = Object.fromEntries(bisCountEntries);
 
   const tree: AddonExport = {
     schema: 1,
     guild: guild.slug,
     guildId: guild.id,
-    phase: phaseId,
+    phase: phase.key,
     generatedAt: Math.floor(Date.now() / 1000),
     checksum: '',
     players: playersOut,
@@ -121,8 +154,9 @@ export async function buildAddonExport(tx: AppTx, guildId: string, phaseId: stri
       weightOff,
     },
   };
-  tree.checksum = 'sha256:' + createHash('sha256').update(JSON.stringify({ ...tree, checksum: '' })).digest('hex');
-  return tree;
+  tree.checksum =
+    'sha256:' + createHash('sha256').update(JSON.stringify(sortKeysDeep({ ...tree, checksum: '' }))).digest('hex');
+  return zAddonExport.parse(tree);
 }
 
 function playerIdentifierFor(

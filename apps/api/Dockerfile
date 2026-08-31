@@ -30,6 +30,11 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/item-data/package.json packages/item-data/package.json
 COPY apps/api/package.json apps/api/package.json
 RUN pnpm install --frozen-lockfile --prod
+# @glps/core has no production dependencies, so pnpm never creates its
+# node_modules dir under --prod; the runner stage still COPYs --from=prod-deps
+# per-package node_modules unconditionally, so guarantee they all exist (even
+# empty) or that COPY fails outright.
+RUN mkdir -p packages/core/node_modules packages/contracts/node_modules packages/item-data/node_modules apps/api/node_modules
 
 # ---- runner: no network access at runtime (§5); catalogs ship in the image ----
 FROM node:22-alpine AS runner
@@ -50,6 +55,7 @@ COPY --from=build /repo/packages/contracts/package.json ./packages/contracts/pac
 COPY --from=build /repo/packages/item-data/dist ./packages/item-data/dist
 COPY --from=build /repo/packages/item-data/package.json ./packages/item-data/package.json
 COPY packages/item-data/classic-era ./packages/item-data/classic-era
+COPY packages/item-data/tbc ./packages/item-data/tbc
 COPY --from=build /repo/apps/api/dist ./apps/api/dist
 COPY --from=build /repo/apps/api/package.json ./apps/api/package.json
 COPY apps/api/src/db/migrations ./apps/api/dist/db/migrations

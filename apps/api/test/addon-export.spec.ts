@@ -38,9 +38,43 @@ describe('buildAddonExport', () => {
 
       const tree = await buildAddonExport(tx, guildId, phaseId);
       expect(() => zAddonExport.parse(tree)).not.toThrow();
+      expect(tree.phase).toBe('P3');
       expect(tree.players['Thrall']).toMatchObject({ class: 'WARRIOR', mainSpec: 'FURY', offSpec: 'PROTECTION', isMain: true, player: 'thrall#1234' });
       expect(tree.items[String(neckItem.itemId)]).toHaveLength(1);
       expect(tree.items[String(neckItem.itemId)]![0]).toMatchObject({ c: 'Thrall', t: 'MAIN', r: 1, s: 'NECK' });
+    });
+
+    await deleteGuild(db, guildId);
+  });
+
+  it('sorts players by character name and produces byte-identical output across repeated calls (determinism)', async () => {
+    const guildId = uuidv7();
+    const phaseId = uuidv7();
+    await db.insert(guilds).values({ id: guildId, slug: `addon-export-order-${Date.now()}`, name: 'Addon Export Order Test', gameVersion: 'classic-era', status: 'ACTIVE' });
+    await db.insert(guildSettings).values({ guildId });
+    await db.insert(items).values(catalog.map((i) => ({ ...i, phaseKey: 'P3' }))).onConflictDoNothing({ target: items.itemId });
+
+    await withTenant(db, guildId, async (tx) => {
+      await tx.insert(phases).values({ id: phaseId, guildId, key: 'P3', name: 'Phase 3', gameVersion: 'classic-era', status: 'OPEN' });
+      await tx.insert(phaseItems).values({ guildId, phaseId, itemId: neckItem.itemId, enabled: true });
+
+      // Inserted in reverse-alphabetical order on purpose — the export must
+      // sort them, not preserve insertion order.
+      for (const name of ['Zul', 'Grommash', 'Aggra']) {
+        const playerId = uuidv7();
+        await tx.insert(players).values({ id: playerId, guildId, phaseId, displayName: name });
+        const characterId = uuidv7();
+        await tx.insert(characters).values({ id: characterId, guildId, playerId, name, class: 'WARRIOR', mainSpec: 'FURY', isMainCharacter: true, slotIndex: 1 });
+      }
+
+      const tree1 = await buildAddonExport(tx, guildId, phaseId);
+      expect(Object.keys(tree1.players)).toEqual(['Aggra', 'Grommash', 'Zul']);
+
+      const tree2 = await buildAddonExport(tx, guildId, phaseId);
+      // generatedAt is a live timestamp; strip it before comparing determinism of everything else.
+      const strip = (t: typeof tree1) => JSON.stringify({ ...t, generatedAt: 0 });
+      expect(strip(tree1)).toBe(strip(tree2));
+      expect(tree1.checksum).toBe(tree2.checksum);
     });
 
     await deleteGuild(db, guildId);
@@ -147,6 +181,12 @@ describe('buildAddonExport', () => {
         why: 'Thrall — MAIN #1. Only listed claim.',
       });
       expect(tree.awarded[0]!.det.w).toMatchObject({ c: 'Thrall', t: 'MAIN', r: 1, b: 0 });
+
+      // The award above (mode=PHASE default, scope=PLAYER default) contributes to
+      // bisCounts — keyed by the same identifier as each claim's `p` field
+      // (discordTag ?? displayName), never the raw player UUID.
+      expect(Object.keys(tree.bisCounts)).toEqual(['thrall#1234']);
+      expect(tree.bisCounts['thrall#1234']).toBe(1);
     });
 
     await deleteGuild(db, guildId);
