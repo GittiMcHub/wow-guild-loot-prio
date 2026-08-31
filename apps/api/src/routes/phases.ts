@@ -1,11 +1,14 @@
 import { and, eq, ilike } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { encodeImportString } from '@glps/core/codec';
 import type { AppDb } from '../db/client.js';
 import { withRequestTenant } from '../db/request-tx.js';
 import { characters, items, phaseItems, players, submissionEntries, submissions, phases } from '../db/schema.js';
 import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
+import { buildAddonExport } from '../services/addon-export.js';
+import { serializeAddonExportToLua } from '../services/lua-serializer.js';
 
 const zCreatePhase = z.object({
   key: z.string().min(1).max(40),
@@ -203,6 +206,34 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
         }
         return { view, rows };
       });
+    },
+  );
+
+  fastify.get<{ Params: { id: string }; Querystring: { format?: string } }>(
+    '/phases/:id/export',
+    { config: { tenant: 'admin' } },
+    async (request, reply) => {
+      const guildId = request.tenant!.guildId;
+      const format = request.query.format === 'addon-json' ? 'addon-json' : 'addon-lua';
+
+      const result = await withRequestTenant(db, request, async (tx) => {
+        const [phase] = await tx.select().from(phases).where(eq(phases.id, request.params.id));
+        if (!phase) return null;
+        const tree = await buildAddonExport(tx, guildId, request.params.id);
+        return { tree, phaseKey: phase.key };
+      });
+      if (!result) return sendError(reply, notFound());
+      const { tree, phaseKey } = result;
+
+      if (format === 'addon-json') {
+        return { json: tree, importString: encodeImportString(tree) };
+      }
+
+      const lua = serializeAddonExportToLua(tree, phaseKey);
+      const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13).replace('T', '-');
+      reply.header('Content-Type', 'text/plain; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="GLPS_${phaseKey}_${stamp}.lua"`);
+      return reply.send(lua);
     },
   );
 };
