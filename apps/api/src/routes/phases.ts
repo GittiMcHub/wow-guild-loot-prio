@@ -9,6 +9,7 @@ import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
 import { buildAddonExport } from '../services/addon-export.js';
 import { serializeAddonExportToLua } from '../services/lua-serializer.js';
+import { fetchItemFromWowhead } from '../services/wowhead-item.js';
 
 const zCreatePhase = z.object({
   key: z.string().min(1).max(40),
@@ -165,6 +166,26 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
           .limit(300);
         return { items: rows };
       });
+    },
+  );
+
+  fastify.post<{ Params: { id: string } }>(
+    '/phases/:id/items/fetch',
+    { config: { tenant: 'admin' } },
+    async (request, reply) => {
+      const body = z.object({ itemId: z.number().int().positive() }).safeParse(request.body);
+      if (!body.success) return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item ID.', body.error.flatten()));
+
+      const [phase] = await withRequestTenant(db, request, (tx) => tx.select().from(phases).where(eq(phases.id, request.params.id)));
+      if (!phase) return sendError(reply, notFound());
+
+      try {
+        const item = await fetchItemFromWowhead(body.data.itemId, phase.gameVersion);
+        return item;
+      } catch (err) {
+        if (err instanceof ApiError) return sendError(reply, err);
+        throw err;
+      }
     },
   );
 
