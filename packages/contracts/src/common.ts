@@ -3,7 +3,7 @@ import { SLOTS } from '@glps/core';
 
 export const zSlot = z.enum(SLOTS as unknown as [string, ...string[]]);
 export const zListTier = z.enum(['MAIN', 'OFF']);
-export const zGameVersion = z.enum(['classic-era', 'sod', 'cata', 'retail']);
+export const zGameVersion = z.enum(['classic-era', 'tbc', 'sod', 'cata', 'retail']);
 export const zGuildStatus = z.enum(['ACTIVE', 'SUSPENDED', 'DELETED']);
 export const zPhaseStatus = z.enum(['DRAFT', 'OPEN', 'LOCKED', 'ARCHIVED']);
 export const zSubmissionStatus = z.enum(['DRAFT', 'SUBMITTED']);

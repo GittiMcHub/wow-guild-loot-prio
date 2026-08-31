@@ -128,6 +128,6 @@ export const zCreateGuildRequest = z.object({
   name: z.string().min(2).max(80),
   realm: z.string().optional(),
   region: z.string().optional(),
-  gameVersion: z.enum(['classic-era', 'sod', 'cata', 'retail']).default('classic-era'),
+  gameVersion: z.enum(['classic-era', 'tbc', 'sod', 'cata', 'retail']).default('classic-era'),
 });
 export type CreateGuildRequest = z.infer<typeof zCreateGuildRequest>;
