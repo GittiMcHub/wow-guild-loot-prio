@@ -60,6 +60,12 @@ export function AdminDashboardPage() {
               <Link to="/admin/phases/$phaseId/invites" params={{ phaseId: phase.id }} className="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
                 Invites
               </Link>
+              <a
+                href={`/api/phases/${phase.id}/export`}
+                className="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+              >
+                Export for addon
+              </a>
             </div>
           </li>
         ))}
