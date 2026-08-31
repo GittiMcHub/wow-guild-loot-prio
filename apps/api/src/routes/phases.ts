@@ -20,6 +20,12 @@ const zPatchPhase = z.object({
   name: z.string().min(1).max(120).optional(),
   status: z.enum(['DRAFT', 'OPEN', 'LOCKED', 'ARCHIVED']).optional(),
   submissionsCloseAt: z.string().datetime().nullable().optional(),
+  itemPoolMode: z.enum(['PREDEFINED', 'OPEN']).optional(),
+  settingsOverride: z
+    .object({ listSize: z.number().int().min(1).max(40), twohandConsumesOffhand: z.boolean(), allowAltOffspecInOffList: z.boolean(), requireFullList: z.boolean() })
+    .partial()
+    .nullable()
+    .optional(),
 });
 const zUnlockRequest = z.object({ reason: z.string().min(3).max(500) });
 const zAttachItem = z.object({
@@ -83,6 +89,8 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
             ...(body.data.submissionsCloseAt !== undefined
               ? { submissionsCloseAt: body.data.submissionsCloseAt ? new Date(body.data.submissionsCloseAt) : null }
               : {}),
+            ...(body.data.itemPoolMode !== undefined ? { itemPoolMode: body.data.itemPoolMode } : {}),
+            ...(body.data.settingsOverride !== undefined ? { settingsOverride: body.data.settingsOverride } : {}),
           })
           .where(eq(phases.id, request.params.id))
           .returning();

@@ -272,6 +272,28 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       return { items: rows };
     });
   });
+
+  fastify.get<{ Params: { itemId: string } }>('/me/items/:itemId/preview', { config: { tenant: 'player' } }, async (request, reply) => {
+    const { playerId } = request.principal as { type: 'PLAYER'; playerId: string };
+    const itemId = Number(request.params.itemId);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item ID.'));
+    }
+    const phase = await withRequestTenant(db, request, async (tx) => {
+      const [player] = await tx.select().from(players).where(eq(players.id, playerId));
+      if (!player) return null;
+      const [phase] = await tx.select().from(phases).where(eq(phases.id, player.phaseId));
+      return phase ?? null;
+    });
+    if (!phase) return sendError(reply, notFound());
+    try {
+      const item = await fetchItemFromWowhead(itemId, phase.gameVersion);
+      return item;
+    } catch (err) {
+      if (err instanceof ApiError) return sendError(reply, err);
+      throw err;
+    }
+  });
 };
 
 export default submissionsRoutes;
