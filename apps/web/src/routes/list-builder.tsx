@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { computeCapacity, validateSubmission, type EntryInput, type ListTier, type Slot } from '@glps/core';
 import { api, ApiError } from '../api';
 import { ItemPicker } from '../components/ItemPicker';
+import { OpenItemPicker } from '../components/OpenItemPicker';
 import { PriorityLadder } from '../components/PriorityLadder';
 import { ALL_SLOTS, type BuilderState, type CatalogEntry, type CharacterInfo, type DraftEntry } from '../lib/builder-types';
 
@@ -10,7 +11,7 @@ interface Me {
   player: { displayName: string };
   characters: CharacterInfo[];
   submissionStatus: 'DRAFT' | 'SUBMITTED';
-  phase: { name: string; status: string; submissionsCloseAt: string | null; open: boolean } | null;
+  phase: { name: string; status: string; submissionsCloseAt: string | null; open: boolean; itemPoolMode: 'PREDEFINED' | 'OPEN' } | null;
   settings: { listSize: number; twohandConsumesOffhand: boolean; allowAltOffspecInOffList: boolean; requireFullList: boolean } | null;
 }
 
@@ -253,6 +254,7 @@ export function ListBuilderPage({ token }: { token: string }) {
                 addingFor={addingFor}
                 settings={me.data!.settings!}
                 catalog={catalog.data?.items ?? []}
+                itemPoolMode={me.data!.phase?.itemPoolMode ?? 'PREDEFINED'}
                 onOpenAdd={(characterId) => setAddingFor({ slot, characterId, useOffSpec: false })}
                 onToggleOffSpec={(v) => setAddingFor((prev) => (prev ? { ...prev, useOffSpec: v } : prev))}
                 onCancelAdd={() => setAddingFor(null)}
@@ -306,6 +308,7 @@ function SlotRow({
   addingFor,
   settings,
   catalog,
+  itemPoolMode,
   onOpenAdd,
   onToggleOffSpec,
   onCancelAdd,
@@ -318,6 +321,7 @@ function SlotRow({
   addingFor: { slot: Slot; characterId: string; useOffSpec: boolean } | null;
   settings: { allowAltOffspecInOffList: boolean };
   catalog: CatalogEntry[];
+  itemPoolMode: 'PREDEFINED' | 'OPEN';
   onOpenAdd: (characterId: string) => void;
   onToggleOffSpec: (v: boolean) => void;
   onCancelAdd: () => void;
@@ -349,7 +353,11 @@ function SlotRow({
                     off spec instead of main spec
                   </label>
                 )}
-                <ItemPicker slot={slot} catalog={catalog} onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
+                {itemPoolMode === 'OPEN' ? (
+                  <OpenItemPicker onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
+                ) : (
+                  <ItemPicker slot={slot} catalog={catalog} onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
+                )}
               </div>
             );
           }
