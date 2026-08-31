@@ -22,6 +22,14 @@ const zPatchPhase = z.object({
   submissionsCloseAt: z.string().datetime().nullable().optional(),
 });
 const zUnlockRequest = z.object({ reason: z.string().min(3).max(500) });
+const zAttachItem = z.object({
+  itemId: z.number().int().positive(),
+  name: z.string().min(1).max(200),
+  quality: z.number().int().min(0).max(7),
+  slot: z.string().min(1),
+  inventoryType: z.enum(['HEAD', 'NECK', 'SHOULDER', 'BACK', 'CHEST', 'WRIST', 'HANDS', 'WAIST', 'LEGS', 'FEET', 'FINGER', 'TRINKET', 'ONEHAND', 'TWOHAND', 'OFFHAND', 'SHIELD', 'RANGED', 'RELIC']),
+  icon: z.string().nullable(),
+});
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   DRAFT: ['OPEN'],
@@ -166,6 +174,52 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
           .limit(300);
         return { items: rows };
       });
+    },
+  );
+
+  fastify.post<{ Params: { id: string } }>(
+    '/phases/:id/items',
+    { config: { tenant: 'admin' } },
+    async (request, reply) => {
+      const body = zAttachItem.safeParse(request.body);
+      if (!body.success) return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item payload.', body.error.flatten()));
+      const guildId = request.tenant!.guildId;
+
+      await withRequestTenant(db, request, async (tx) => {
+        await tx
+          .insert(items)
+          .values({
+            itemId: body.data.itemId,
+            name: body.data.name,
+            quality: body.data.quality,
+            slot: body.data.slot,
+            inventoryType: body.data.inventoryType,
+            icon: body.data.icon,
+          })
+          .onConflictDoUpdate({
+            target: items.itemId,
+            set: { name: body.data.name, quality: body.data.quality, slot: body.data.slot, inventoryType: body.data.inventoryType, icon: body.data.icon },
+          });
+        await tx
+          .insert(phaseItems)
+          .values({ guildId, phaseId: request.params.id, itemId: body.data.itemId, enabled: true })
+          .onConflictDoNothing();
+      });
+      return { ok: true };
+    },
+  );
+
+  fastify.delete<{ Params: { id: string; itemId: string } }>(
+    '/phases/:id/items/:itemId',
+    { config: { tenant: 'admin' } },
+    async (request) => {
+      await withRequestTenant(db, request, (tx) =>
+        tx
+          .update(phaseItems)
+          .set({ enabled: false })
+          .where(and(eq(phaseItems.phaseId, request.params.id), eq(phaseItems.itemId, Number(request.params.itemId)))),
+      );
+      return { ok: true };
     },
   );
 
