@@ -57,6 +57,9 @@ export function AdminDashboardPage() {
               <Link to="/admin/phases/$phaseId/resolve" params={{ phaseId: phase.id }} className="rounded bg-emerald-700 px-3 py-1.5 text-sm hover:bg-emerald-600">
                 Resolve drop
               </Link>
+              <Link to="/admin/phases/$phaseId/invites" params={{ phaseId: phase.id }} className="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
+                Invites
+              </Link>
             </div>
           </li>
         ))}

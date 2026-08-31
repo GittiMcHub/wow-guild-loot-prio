@@ -1,5 +1,6 @@
 import { createRootRoute, createRoute, createRouter, Outlet, useNavigate } from '@tanstack/react-router';
 import { AdminDashboardPage } from './routes/admin/dashboard';
+import { AdminInvitesPage } from './routes/admin/invites';
 import { AdminLoginPage } from './routes/admin/login';
 import { AdminMatrixPage } from './routes/admin/matrix';
 import { AdminResolverPage } from './routes/admin/resolver';
@@ -52,6 +53,16 @@ function AdminResolverRouteComponent() {
   return <AdminResolverPage phaseId={phaseId} />;
 }
 
+const adminInvitesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/phases/$phaseId/invites',
+  component: AdminInvitesRouteComponent,
+});
+function AdminInvitesRouteComponent() {
+  const { phaseId } = adminInvitesRoute.useParams();
+  return <AdminInvitesPage phaseId={phaseId} />;
+}
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   inviteRoute,
@@ -60,6 +71,7 @@ const routeTree = rootRoute.addChildren([
   adminDashboardRoute,
   adminMatrixRoute,
   adminResolverRoute,
+  adminInvitesRoute,
 ]);
 
 export const router = createRouter({ routeTree });
