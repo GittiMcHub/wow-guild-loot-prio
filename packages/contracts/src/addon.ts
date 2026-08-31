@@ -14,6 +14,7 @@ export const zAddonClaim = z.object({
   b: z.number().optional(),
   tie: z.boolean().optional(),
 });
+export type AddonClaim = z.infer<typeof zAddonClaim>;
 
 export const zAddonContender = z.object({
   c: z.string(),
@@ -35,6 +36,7 @@ export const zAddonAward = z.object({
     o: z.array(zAddonContender),
   }),
 });
+export type AddonAward = z.infer<typeof zAddonAward>;
 
 export const zAddonExport = z.object({
   schema: z.literal(1),
