@@ -39,7 +39,12 @@ export function AdminDashboardPage() {
         <span className="rounded-full bg-emerald-900/50 px-3 py-1 text-xs text-emerald-400">{guild.data!.status}</span>
       </header>
 
-      <h2 className="mb-2 font-medium text-zinc-300">Phases</h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="font-medium text-zinc-300">Phases</h2>
+        <Link to="/admin/phases/new" className="rounded bg-emerald-700 px-3 py-1.5 text-sm hover:bg-emerald-600">
+          New phase
+        </Link>
+      </div>
       {phases.isLoading && <p className="text-sm text-zinc-500">Loading…</p>}
       {phases.data && phases.data.phases.length === 0 && <p className="text-sm text-zinc-500">No phases yet.</p>}
       <ul className="space-y-2">

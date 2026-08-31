@@ -3,6 +3,7 @@ import { AdminDashboardPage } from './routes/admin/dashboard';
 import { AdminInvitesPage } from './routes/admin/invites';
 import { AdminLoginPage } from './routes/admin/login';
 import { AdminMatrixPage } from './routes/admin/matrix';
+import { NewPhasePage } from './routes/admin/new-phase';
 import { AdminResolverPage } from './routes/admin/resolver';
 import { HomePage } from './routes/home';
 import { InvitePage } from './routes/invite';
@@ -32,6 +33,8 @@ function AdminLoginRouteComponent() {
 }
 
 const adminDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminDashboardPage });
+
+const newPhaseRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/phases/new', component: NewPhasePage });
 
 const adminMatrixRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -69,6 +72,7 @@ const routeTree = rootRoute.addChildren([
   myListRoute,
   adminLoginRoute,
   adminDashboardRoute,
+  newPhaseRoute,
   adminMatrixRoute,
   adminResolverRoute,
   adminInvitesRoute,
