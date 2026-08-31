@@ -1,5 +1,5 @@
 [
-  { "itemId": 28546, "name": "Bloodstained Hunting Spear", "quality": 4, "slot": "MAIN_HAND", "inventoryType": "ONEHAND", "icon": null, "source": "Attumen the Huntsman", "classMask": null },
+  { "itemId": 28546, "name": "Bloodstained Hunting Spear", "quality": 4, "slot": "WEAPON", "inventoryType": "ONEHAND", "icon": null, "source": "Attumen the Huntsman", "classMask": null },
   { "itemId": 28649, "name": "Ring of a Thousand Marks", "quality": 4, "slot": "FINGER", "inventoryType": "FINGER", "icon": null, "source": "Attumen the Huntsman", "classMask": null },
   { "itemId": 28824, "name": "Chain of the Twilight Owl", "quality": 4, "slot": "NECK", "inventoryType": "NECK", "icon": null, "source": "Moroes", "classMask": null },
   { "itemId": 28579, "name": "Moroes' Lucky Pocket Watch", "quality": 4, "slot": "TRINKET", "inventoryType": "TRINKET", "icon": null, "source": "Moroes", "classMask": null },
