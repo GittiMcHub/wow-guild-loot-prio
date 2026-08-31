@@ -50,6 +50,17 @@ describe('sample-p3 catalog (§12)', () => {
   });
 });
 
+describe('tbc/karazhan-p1 catalog', () => {
+  it('loads at least 15 real TBC items across multiple slot families', () => {
+    const items = loadCatalog('tbc', 'karazhan-p1');
+    expect(items.length).toBeGreaterThanOrEqual(15);
+    const slots = new Set(items.map((i) => i.slot));
+    expect(slots.size).toBeGreaterThanOrEqual(6);
+    const ids = new Set(items.map((i) => i.itemId));
+    expect(ids.size).toBe(items.length); // no duplicate itemIds
+  });
+});
+
 describe('parseCatalogCsv (§12 catalog:import)', () => {
   it('parses a well-formed CSV', () => {
     const csv = [

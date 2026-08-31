@@ -1,0 +1,18 @@
+[
+  { "itemId": 28546, "name": "Bloodstained Hunting Spear", "quality": 4, "slot": "MAIN_HAND", "inventoryType": "ONEHAND", "icon": null, "source": "Attumen the Huntsman", "classMask": null },
+  { "itemId": 28649, "name": "Ring of a Thousand Marks", "quality": 4, "slot": "FINGER", "inventoryType": "FINGER", "icon": null, "source": "Attumen the Huntsman", "classMask": null },
+  { "itemId": 28824, "name": "Chain of the Twilight Owl", "quality": 4, "slot": "NECK", "inventoryType": "NECK", "icon": null, "source": "Moroes", "classMask": null },
+  { "itemId": 28579, "name": "Moroes' Lucky Pocket Watch", "quality": 4, "slot": "TRINKET", "inventoryType": "TRINKET", "icon": null, "source": "Moroes", "classMask": null },
+  { "itemId": 28190, "name": "Slippers of Serenity", "quality": 4, "slot": "FEET", "inventoryType": "FEET", "icon": null, "source": "Maiden of Virtue", "classMask": null },
+  { "itemId": 28189, "name": "Belt of Blunted Swings", "quality": 4, "slot": "WAIST", "inventoryType": "WAIST", "icon": null, "source": "Maiden of Virtue", "classMask": null },
+  { "itemId": 28762, "name": "Shroud of Pure Thought", "quality": 4, "slot": "BACK", "inventoryType": "BACK", "icon": null, "source": "Opera Event", "classMask": null },
+  { "itemId": 28368, "name": "Crimson Girdle of the Indomitable", "quality": 4, "slot": "WAIST", "inventoryType": "WAIST", "icon": null, "source": "Opera Event", "classMask": null },
+  { "itemId": 28369, "name": "Cloak of Autumnal Nights", "quality": 4, "slot": "BACK", "inventoryType": "BACK", "icon": null, "source": "Opera Event", "classMask": null },
+  { "itemId": 28497, "name": "Ribbon of Sacrifice", "quality": 4, "slot": "NECK", "inventoryType": "NECK", "icon": null, "source": "Opera Event", "classMask": null },
+  { "itemId": 28820, "name": "The Sadist's Collar", "quality": 4, "slot": "NECK", "inventoryType": "NECK", "icon": null, "source": "The Big Bad Wolf", "classMask": null },
+  { "itemId": 28755, "name": "Big Bad Wolf's Robe", "quality": 4, "slot": "CHEST", "inventoryType": "CHEST", "icon": null, "source": "The Big Bad Wolf", "classMask": null },
+  { "itemId": 28650, "name": "Signet of Unshakable Faith", "quality": 4, "slot": "FINGER", "inventoryType": "FINGER", "icon": null, "source": "Attumen the Huntsman", "classMask": null },
+  { "itemId": 28185, "name": "Bladespire Warbands", "quality": 4, "slot": "WRIST", "inventoryType": "WRIST", "icon": null, "source": "Trash", "classMask": null },
+  { "itemId": 28187, "name": "Cursed Vision of Sargeras", "quality": 4, "slot": "HEAD", "inventoryType": "HEAD", "icon": null, "source": "Terestian Illhoof", "classMask": null },
+  { "itemId": 28651, "name": "Shard of the Virtuous", "quality": 4, "slot": "TRINKET", "inventoryType": "TRINKET", "icon": null, "source": "Terestian Illhoof", "classMask": null }
+]
