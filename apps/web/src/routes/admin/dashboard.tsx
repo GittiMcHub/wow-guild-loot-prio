@@ -56,6 +56,9 @@ export function AdminDashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className={`rounded-full px-2 py-1 text-xs ${STATUS_COLOR[phase.status]}`}>{phase.status}</span>
+              <Link to="/admin/phases/$phaseId/items" params={{ phaseId: phase.id }} className="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
+                Configure
+              </Link>
               <Link to="/admin/phases/$phaseId/matrix" params={{ phaseId: phase.id }} className="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
                 Matrix
               </Link>

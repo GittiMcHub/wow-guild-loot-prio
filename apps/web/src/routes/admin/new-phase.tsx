@@ -14,10 +14,7 @@ export function NewPhasePage() {
 
   const createPhase = useMutation({
     mutationFn: () => api.post<{ id: string }>('/phases', { key, name, gameVersion }),
-    // TODO(task 5): drop this cast once the /admin/phases/$phaseId/items route
-    // (added by Task 5) is registered in router.tsx and part of the typed route tree.
-    onSuccess: (res) =>
-      navigate({ to: '/admin/phases/$phaseId/items', params: { phaseId: res.id } } as unknown as Parameters<typeof navigate>[0]),
+    onSuccess: (res) => navigate({ to: '/admin/phases/$phaseId/items', params: { phaseId: res.id } }),
     onError: (err) => setError(err instanceof ApiError ? err.message : 'Could not create phase.'),
   });
 
