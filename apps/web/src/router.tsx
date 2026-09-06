@@ -5,6 +5,7 @@ import { AdminLoginPage } from './routes/admin/login';
 import { AdminMatrixPage } from './routes/admin/matrix';
 import { AdminResolverPage } from './routes/admin/resolver';
 import { HomePage } from './routes/home';
+import { InstanceDashboardPage } from './routes/instance/dashboard';
 import { InstanceLoginPage } from './routes/instance/login';
 import { InvitePage } from './routes/invite';
 import { ListBuilderPage } from './routes/list-builder';
@@ -37,6 +38,8 @@ function InstanceLoginRouteComponent() {
   const navigate = useNavigate();
   return <InstanceLoginPage onLoggedIn={() => navigate({ to: '/instance' })} />;
 }
+
+const instanceDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/instance', component: InstanceDashboardPage });
 
 const adminDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminDashboardPage });
 
@@ -76,6 +79,7 @@ const routeTree = rootRoute.addChildren([
   myListRoute,
   adminLoginRoute,
   instanceLoginRoute,
+  instanceDashboardRoute,
   adminDashboardRoute,
   adminMatrixRoute,
   adminResolverRoute,
