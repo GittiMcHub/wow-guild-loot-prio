@@ -37,3 +37,35 @@ export async function verifyAdminJwt(token: string, secret: string): Promise<Adm
   }
   return { sub: payload.sub, gid: payload.gid, role: payload.role as AdminJwtClaims['role'] };
 }
+
+export interface InstanceAdminJwtClaims {
+  sub: string; // instance_admins.id
+}
+
+/** Short-lived (15 min) access token for the separate instance-admin principal. */
+export async function signInstanceAccessToken(claims: InstanceAdminJwtClaims, secret: string): Promise<string> {
+  return new SignJWT({ typ: 'instance' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(claims.sub)
+    .setIssuedAt()
+    .setExpirationTime('15m')
+    .sign(key(secret));
+}
+
+/** Rotating refresh token (7 days) for the instance-admin principal. */
+export async function signInstanceRefreshToken(claims: InstanceAdminJwtClaims, secret: string): Promise<string> {
+  return new SignJWT({ typ: 'instance-refresh' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(claims.sub)
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(key(secret));
+}
+
+export async function verifyInstanceAdminJwt(token: string, secret: string): Promise<InstanceAdminJwtClaims> {
+  const { payload } = await jwtVerify(token, key(secret));
+  if (payload.typ !== 'instance' || typeof payload.sub !== 'string') {
+    throw new Error('Malformed instance-admin JWT payload.');
+  }
+  return { sub: payload.sub };
+}
