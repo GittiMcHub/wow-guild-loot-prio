@@ -3,10 +3,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 import type { AppDb } from '../db/client.js';
 import { unauthorized } from '../errors.js';
-import { verifyAdminJwt } from '../services/jwt.js';
+import { verifyAdminJwt, verifyInstanceAdminJwt } from '../services/jwt.js';
 import { hashToken } from '../services/tokens.js';
 
-export type TenantMode = 'public' | 'instance' | 'invite' | 'player' | 'admin';
+export type TenantMode = 'public' | 'instance' | 'admin-setup' | 'invite' | 'player' | 'admin';
 
 export interface TenantContext {
   guildId: string;
@@ -15,7 +15,9 @@ export interface TenantContext {
 export type Principal =
   | { type: 'ADMIN'; adminId: string; role: 'LOOT_MASTER' | 'OFFICER' | 'VIEWER' }
   | { type: 'PLAYER'; playerId: string; accessTokenId: string }
-  | { type: 'INVITE'; inviteId: string; phaseId: string };
+  | { type: 'INVITE'; inviteId: string; phaseId: string }
+  | { type: 'INSTANCE_ADMIN'; instanceAdminId: string }
+  | { type: 'ADMIN_SETUP'; adminId: string; setupTokenId: string };
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -48,6 +50,14 @@ interface InviteRow {
   revoked_at: string | null;
 }
 
+interface AdminSetupTokenRow {
+  setup_token_id: string;
+  guild_id: string;
+  admin_id: string;
+  expires_at: string;
+  used_at: string | null;
+}
+
 interface PlayerTokenRow {
   access_token_id: string;
   guild_id: string;
@@ -64,7 +74,35 @@ interface PlayerTokenRow {
 const tenantPlugin: FastifyPluginAsync<TenantPluginOptions> = async (fastify, opts) => {
   fastify.addHook('onRequest', async (request) => {
     const mode = request.routeOptions.config.tenant;
-    if (mode === 'public' || mode === 'instance') return;
+    if (mode === 'public') return;
+
+    if (mode === 'instance') {
+      const token = request.cookies?.glps_instance_at;
+      if (!token) throw unauthorized('Missing instance-admin session.');
+      try {
+        const claims = await verifyInstanceAdminJwt(token, opts.jwtSecret);
+        request.principal = { type: 'INSTANCE_ADMIN', instanceAdminId: claims.sub };
+      } catch {
+        throw unauthorized('Invalid or expired instance-admin session.');
+      }
+      return;
+    }
+
+    if (mode === 'admin-setup') {
+      const token = (request.params as Record<string, string> | undefined)?.token;
+      if (!token) throw unauthorized('Missing setup token.');
+      const hash = hashToken(token, opts.tokenPepper);
+      const rows = (await opts.db.execute(
+        rawSql`SELECT * FROM resolve_admin_setup_token_hash(${hash})`,
+      )) as unknown as AdminSetupTokenRow[];
+      const row = rows[0];
+      if (!row?.setup_token_id) throw unauthorized('Invalid setup token.');
+      if (row.used_at) throw unauthorized('This setup link has already been used.');
+      if (new Date(row.expires_at).getTime() < Date.now()) throw unauthorized('This setup link has expired.');
+      request.tenant = { guildId: row.guild_id };
+      request.principal = { type: 'ADMIN_SETUP', adminId: row.admin_id, setupTokenId: row.setup_token_id };
+      return;
+    }
 
     if (mode === 'invite') {
       const token = (request.params as Record<string, string> | undefined)?.token;
