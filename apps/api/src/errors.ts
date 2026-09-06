@@ -24,7 +24,8 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'UNAUTHORIZED'
   | 'RATE_LIMITED'
-  | 'VALIDATION_FAILED';
+  | 'VALIDATION_FAILED'
+  | 'SETUP_TOKEN_INVALID';
 
 export class ApiError extends Error {
   constructor(

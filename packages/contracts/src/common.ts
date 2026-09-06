@@ -65,6 +65,7 @@ export const zErrorCode = z.enum([
   'NOT_FOUND',
   'UNAUTHORIZED',
   'RATE_LIMITED',
+  'SETUP_TOKEN_INVALID',
 ]);
 
 export const zErrorBody = z.object({

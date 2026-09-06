@@ -138,3 +138,10 @@ export const zCreateGuildRequest = z.object({
   gameVersion: z.enum(['classic-era', 'tbc', 'sod', 'cata', 'retail']).default('classic-era'),
 });
 export type CreateGuildRequest = z.infer<typeof zCreateGuildRequest>;
+
+/** POST /setup/:token */
+export const zSetupAdminPasswordRequest = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().min(8).max(200),
+});
+export type SetupAdminPasswordRequest = z.infer<typeof zSetupAdminPasswordRequest>;
