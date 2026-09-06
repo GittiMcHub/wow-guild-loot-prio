@@ -71,8 +71,23 @@ export const admins = pgTable(
     role: text('role').notNull(), // LOOT_MASTER | OFFICER | VIEWER
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique('admins_guild_username').on(t.guildId, t.username)],
+  (t) => [
+    unique('admins_guild_username').on(t.guildId, t.username),
+    unique('admins_id_guild').on(t.id, t.guildId),
+  ],
 );
+
+export const adminSetupTokens = pgTable('admin_setup_tokens', {
+  id: uuid('id').primaryKey(),
+  guildId: uuid('guild_id')
+    .notNull()
+    .references(() => guilds.id, { onDelete: 'cascade' }),
+  adminId: uuid('admin_id').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const phases = pgTable(
   'phases',
@@ -344,6 +359,7 @@ export const auditLog = pgTable('audit_log', {
 /** Every table other than guilds/guild_settings/instance_admins/items carries guild_id (§6.1). */
 export const TENANT_TABLES = [
   'admins',
+  'admin_setup_tokens',
   'phases',
   'phase_items',
   'players',
