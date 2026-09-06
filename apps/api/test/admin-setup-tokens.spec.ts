@@ -24,7 +24,7 @@ describe('admin_setup_tokens (§ instance-admin guild registration)', () => {
     const guildId = uuidv7();
     const adminId = uuidv7();
     const tokenId = uuidv7();
-    const plaintext = 'plaintext-setup-token';
+    const plaintext = `plaintext-setup-token-${tokenId}`;
 
     await migrate.db.insert(guilds).values({ id: guildId, slug: `setup-tok-${Date.now()}`, name: 'x', gameVersion: 'classic-era', status: 'ACTIVE' });
     await migrate.db.insert(guildSettings).values({ guildId });
