@@ -18,6 +18,8 @@ services:
       DATABASE_URL: "postgres://${POSTGRES_USER:-glps}:${POSTGRES_PASSWORD:?set me}@db:5432/${POSTGRES_DB:-glps}"
       MIGRATE_DB_PASSWORD: "${MIGRATE_DB_PASSWORD:?set me}"
       APP_DB_PASSWORD: "${APP_DB_PASSWORD:?set me}"
+      INSTANCE_ADMIN_USERNAME: "${INSTANCE_ADMIN_USERNAME:?set me}"
+      INSTANCE_ADMIN_PASSWORD: "${INSTANCE_ADMIN_PASSWORD:?set me}"
       SEED_DEMO: "${SEED_DEMO:-false}"
       NODE_ENV: production
     depends_on: { db: { condition: service_healthy } }

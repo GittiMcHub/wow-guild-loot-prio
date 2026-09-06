@@ -1,3 +1,4 @@
+import argon2 from 'argon2';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -65,6 +66,28 @@ async function main() {
     console.log('Migrations complete.');
   } finally {
     await sql.end();
+  }
+
+  const instanceAdminUsername = process.env.INSTANCE_ADMIN_USERNAME;
+  const instanceAdminPassword = process.env.INSTANCE_ADMIN_PASSWORD;
+  if (instanceAdminUsername && instanceAdminPassword) {
+    const migrateUrl = new URL(bootstrapUrl);
+    migrateUrl.username = 'glps_migrate';
+    migrateUrl.password = migratePassword;
+    const sql2 = postgres(migrateUrl.toString());
+    try {
+      const passwordHash = await argon2.hash(instanceAdminPassword, { type: argon2.argon2id });
+      await sql2`
+        INSERT INTO instance_admins (id, username, password_hash)
+        VALUES (gen_random_uuid(), ${instanceAdminUsername}, ${passwordHash})
+        ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash
+      `;
+      console.log(`Instance admin "${instanceAdminUsername}" ready.`);
+    } finally {
+      await sql2.end();
+    }
+  } else if (isProd) {
+    throw new Error('INSTANCE_ADMIN_USERNAME and INSTANCE_ADMIN_PASSWORD are required in production.');
   }
 
   // §5: "a seeded instance admin and two demo guilds, credentials printed to

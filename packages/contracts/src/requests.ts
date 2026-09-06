@@ -118,6 +118,13 @@ export const zAdminLoginRequest = z.object({
 });
 export type AdminLoginRequest = z.infer<typeof zAdminLoginRequest>;
 
+/** POST /instance/login */
+export const zInstanceLoginRequest = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().min(1).max(200),
+});
+export type InstanceLoginRequest = z.infer<typeof zInstanceLoginRequest>;
+
 /** POST /instance/guilds */
 export const zCreateGuildRequest = z.object({
   slug: z
