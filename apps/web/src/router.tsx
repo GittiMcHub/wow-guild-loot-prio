@@ -7,6 +7,7 @@ import { AdminResolverPage } from './routes/admin/resolver';
 import { HomePage } from './routes/home';
 import { InstanceDashboardPage } from './routes/instance/dashboard';
 import { InstanceLoginPage } from './routes/instance/login';
+import { InstanceSetupPage } from './routes/instance/setup';
 import { InvitePage } from './routes/invite';
 import { ListBuilderPage } from './routes/list-builder';
 
@@ -40,6 +41,13 @@ function InstanceLoginRouteComponent() {
 }
 
 const instanceDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/instance', component: InstanceDashboardPage });
+
+const instanceSetupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/setup/$token', component: InstanceSetupRouteComponent });
+function InstanceSetupRouteComponent() {
+  const { token } = instanceSetupRoute.useParams();
+  const navigate = useNavigate();
+  return <InstanceSetupPage token={token} onDone={(guildSlug) => navigate({ to: '/g/$guildSlug/login', params: { guildSlug } })} />;
+}
 
 const adminDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminDashboardPage });
 
@@ -80,6 +88,7 @@ const routeTree = rootRoute.addChildren([
   adminLoginRoute,
   instanceLoginRoute,
   instanceDashboardRoute,
+  instanceSetupRoute,
   adminDashboardRoute,
   adminMatrixRoute,
   adminResolverRoute,
