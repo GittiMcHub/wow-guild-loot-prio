@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, lt, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { zClaimInviteRequest, zCreateInvitesRequest } from '@glps/contracts';
 import type { AppDb } from '../db/client.js';
@@ -58,6 +58,19 @@ const invitesRoutes: FastifyPluginAsync<{ db: AppDb; tokenPepper: string; public
           throw new ApiError(410, 'INVITE_EXHAUSTED', 'This invite has already been used.');
         }
 
+        // Atomic claim: a maxUses > 1 invite (§ wildcard invites) can be
+        // opened by many people within the same second — the read above is
+        // just an early exit, not the actual guard. WHERE usedCount <
+        // maxUses inside the UPDATE makes the increment-and-check one
+        // indivisible step; the plain read-then-write this replaced let N
+        // concurrent claims all read the same usedCount and all pass.
+        const claimed = await tx
+          .update(invites)
+          .set({ usedCount: sql`${invites.usedCount} + 1` })
+          .where(and(eq(invites.id, inviteId), lt(invites.usedCount, invites.maxUses)))
+          .returning({ id: invites.id });
+        if (claimed.length === 0) throw new ApiError(410, 'INVITE_EXHAUSTED', 'This invite has already been used.');
+
         const newPlayerId = uuidv7();
         await tx.insert(players).values({
           id: newPlayerId,
@@ -92,7 +105,6 @@ const invitesRoutes: FastifyPluginAsync<{ db: AppDb; tokenPepper: string; public
         });
 
         await tx.insert(accessTokens).values({ id: uuidv7(), guildId, playerId: newPlayerId, tokenHash });
-        await tx.update(invites).set({ usedCount: invite.usedCount + 1 }).where(eq(invites.id, inviteId));
 
         return newPlayerId;
       });

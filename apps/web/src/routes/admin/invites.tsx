@@ -16,8 +16,9 @@ interface Invite {
 
 export function AdminInvitesPage({ phaseId }: { phaseId: string }) {
   const queryClient = useQueryClient();
-  const [lastCreatedUrl, setLastCreatedUrl] = useState<string | null>(null);
+  const [lastCreated, setLastCreated] = useState<{ url: string; maxUses: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [maxUsesInput, setMaxUsesInput] = useState('1');
 
   const invites = useQuery<{ invites: Invite[] }>({
     queryKey: ['admin-invites', phaseId],
@@ -25,10 +26,10 @@ export function AdminInvitesPage({ phaseId }: { phaseId: string }) {
   });
 
   const createInvite = useMutation({
-    mutationFn: () => api.post<{ invites: Array<{ id: string; url: string; label: string | null }> }>(`/phases/${phaseId}/invites`, { kind: 'GENERIC', maxUses: 1 }),
-    onSuccess: (res) => {
+    mutationFn: (maxUses: number) => api.post<{ invites: Array<{ id: string; url: string; label: string | null }> }>(`/phases/${phaseId}/invites`, { kind: 'GENERIC', maxUses }),
+    onSuccess: (res, maxUses) => {
       setError(null);
-      setLastCreatedUrl(res.invites[0]!.url);
+      setLastCreated({ url: res.invites[0]!.url, maxUses });
       queryClient.invalidateQueries({ queryKey: ['admin-invites', phaseId] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : 'Could not create invite.'),
@@ -48,18 +49,37 @@ export function AdminInvitesPage({ phaseId }: { phaseId: string }) {
         <h1 className="text-2xl font-semibold">Invites</h1>
       </header>
 
-      <button
-        onClick={() => createInvite.mutate()}
-        disabled={createInvite.isPending}
-        className="mb-4 rounded bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
-      >
-        {createInvite.isPending ? 'Creating…' : 'New invite'}
-      </button>
+      <div className="mb-4 flex items-end gap-2">
+        <label className="text-sm">
+          <span className="mb-1 block text-zinc-400">Max uses</span>
+          <input
+            type="number"
+            min={1}
+            value={maxUsesInput}
+            onChange={(e) => setMaxUsesInput(e.target.value)}
+            className="input w-24"
+          />
+        </label>
+        <button
+          onClick={() => createInvite.mutate(Math.max(1, Number(maxUsesInput) || 1))}
+          disabled={createInvite.isPending}
+          className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
+        >
+          {createInvite.isPending ? 'Creating…' : 'New invite'}
+        </button>
+      </div>
+      <p className="mb-4 -mt-2 text-xs text-zinc-500">
+        One link, claimable this many times — each claim gets its own character list and token. Leave at 1 for a single-use invite.
+      </p>
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
-      {lastCreatedUrl && (
+      {lastCreated && (
         <div className="mb-4 rounded border border-emerald-800 bg-emerald-950/40 p-3">
-          <p className="mb-1 text-sm text-zinc-400">Send this link to the player — it's shown only once here:</p>
-          <code className="block break-all text-emerald-400">{lastCreatedUrl}</code>
+          <p className="mb-1 text-sm text-zinc-400">
+            {lastCreated.maxUses > 1
+              ? `Send this link to up to ${lastCreated.maxUses} players — each claim gets its own list. Shown only once here:`
+              : "Send this link to the player — it's shown only once here:"}
+          </p>
+          <code className="block break-all text-emerald-400">{lastCreated.url}</code>
         </div>
       )}
 
