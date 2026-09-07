@@ -25,7 +25,8 @@ export type ErrorCode =
   | 'UNAUTHORIZED'
   | 'RATE_LIMITED'
   | 'VALIDATION_FAILED'
-  | 'SETUP_TOKEN_INVALID';
+  | 'SETUP_TOKEN_INVALID'
+  | 'WOWHEAD_FETCH_FAILED';
 
 export class ApiError extends Error {
   constructor(

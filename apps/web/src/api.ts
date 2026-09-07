@@ -34,4 +34,7 @@ export const api = {
     request<T>(path, withAuth(token, { method: 'POST', body: JSON.stringify(body) })),
   put: <T>(path: string, body: unknown, token?: string) =>
     request<T>(path, withAuth(token, { method: 'PUT', body: JSON.stringify(body) })),
+  del: <T>(path: string, token?: string) => request<T>(path, withAuth(token, { method: 'DELETE' })),
+  patch: <T>(path: string, body: unknown, token?: string) =>
+    request<T>(path, withAuth(token, { method: 'PATCH', body: JSON.stringify(body) })),
 };

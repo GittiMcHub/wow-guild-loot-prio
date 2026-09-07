@@ -66,6 +66,7 @@ export const zErrorCode = z.enum([
   'UNAUTHORIZED',
   'RATE_LIMITED',
   'SETUP_TOKEN_INVALID',
+  'WOWHEAD_FETCH_FAILED',
 ]);
 
 export const zErrorBody = z.object({

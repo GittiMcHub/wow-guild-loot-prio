@@ -3,6 +3,8 @@ import { AdminDashboardPage } from './routes/admin/dashboard';
 import { AdminInvitesPage } from './routes/admin/invites';
 import { AdminLoginPage } from './routes/admin/login';
 import { AdminMatrixPage } from './routes/admin/matrix';
+import { NewPhasePage } from './routes/admin/new-phase';
+import { AdminPhaseItemsPage } from './routes/admin/phase-items';
 import { AdminResolverPage } from './routes/admin/resolver';
 import { HomePage } from './routes/home';
 import { InstanceDashboardPage } from './routes/instance/dashboard';
@@ -51,6 +53,8 @@ function InstanceSetupRouteComponent() {
 
 const adminDashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin', component: AdminDashboardPage });
 
+const newPhaseRoute = createRoute({ getParentRoute: () => rootRoute, path: '/admin/phases/new', component: NewPhasePage });
+
 const adminMatrixRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/phases/$phaseId/matrix',
@@ -81,6 +85,16 @@ function AdminInvitesRouteComponent() {
   return <AdminInvitesPage phaseId={phaseId} />;
 }
 
+const adminPhaseItemsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/phases/$phaseId/items',
+  component: AdminPhaseItemsRouteComponent,
+});
+function AdminPhaseItemsRouteComponent() {
+  const { phaseId } = adminPhaseItemsRoute.useParams();
+  return <AdminPhaseItemsPage phaseId={phaseId} />;
+}
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   inviteRoute,
@@ -90,9 +104,11 @@ const routeTree = rootRoute.addChildren([
   instanceDashboardRoute,
   instanceSetupRoute,
   adminDashboardRoute,
+  newPhaseRoute,
   adminMatrixRoute,
   adminResolverRoute,
   adminInvitesRoute,
+  adminPhaseItemsRoute,
 ]);
 
 export const router = createRouter({ routeTree });

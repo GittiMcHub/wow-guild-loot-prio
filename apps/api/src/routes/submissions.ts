@@ -7,6 +7,8 @@ import { withRequestTenant } from '../db/request-tx.js';
 import { characters, guildSettings, items, phaseItems, phases, players, submissionEntries, submissions } from '../db/schema.js';
 import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
+import { mergeSettings, type EffectiveSettings } from '../services/phase-settings.js';
+import { fetchItemFromWowhead } from '../services/wowhead-item.js';
 
 async function loadPlayerContext(tx: AppTx, playerId: string) {
   const [player] = await tx.select().from(players).where(eq(players.id, playerId));
@@ -24,18 +26,36 @@ function phaseIsOpen(phase: { status: string; submissionsCloseAt: Date | null })
   return true;
 }
 
-async function catalogLookup(tx: AppTx, phaseId: string): Promise<(itemId: number) => CatalogItem | undefined> {
-  const rows = await tx
-    .select({
-      itemId: items.itemId,
-      inventoryType: items.inventoryType,
-      classMask: items.classMask,
-    })
-    .from(phaseItems)
-    .innerJoin(items, eq(items.itemId, phaseItems.itemId))
-    .where(and(eq(phaseItems.phaseId, phaseId), eq(phaseItems.enabled, true)));
+async function catalogLookup(tx: AppTx, phaseId: string, mode: string): Promise<(itemId: number) => CatalogItem | undefined> {
+  const rows =
+    mode === 'OPEN'
+      ? await tx.select({ itemId: items.itemId, inventoryType: items.inventoryType, classMask: items.classMask }).from(items)
+      : await tx
+          .select({ itemId: items.itemId, inventoryType: items.inventoryType, classMask: items.classMask })
+          .from(phaseItems)
+          .innerJoin(items, eq(items.itemId, phaseItems.itemId))
+          .where(and(eq(phaseItems.phaseId, phaseId), eq(phaseItems.enabled, true)));
   const byId = new Map(rows.map((r) => [r.itemId, { itemId: r.itemId, inventoryType: r.inventoryType as CatalogItem['inventoryType'], classMask: r.classMask ?? undefined }]));
   return (itemId: number) => byId.get(itemId);
+}
+
+async function ensureOpenModeItemsExist(tx: AppTx, entries: Array<{ itemId: number }>, gameVersion: string): Promise<void> {
+  const distinctIds = [...new Set(entries.map((e) => e.itemId))];
+  for (const itemId of distinctIds) {
+    const [existing] = await tx.select({ itemId: items.itemId }).from(items).where(eq(items.itemId, itemId));
+    if (existing) continue;
+    try {
+      const fetched = await fetchItemFromWowhead(itemId, gameVersion);
+      await tx
+        .insert(items)
+        .values({ itemId: fetched.itemId, name: fetched.name, quality: fetched.quality, slot: fetched.slot, inventoryType: fetched.inventoryType, icon: fetched.icon })
+        .onConflictDoUpdate({ target: items.itemId, set: { name: fetched.name, quality: fetched.quality, slot: fetched.slot, inventoryType: fetched.inventoryType, icon: fetched.icon } });
+    } catch {
+      // Fetch failed — leave this item absent from `items`. catalogLookup
+      // will return undefined for it, and validateSubmission's existing
+      // ITEM_NOT_IN_PHASE error covers it. No special-casing needed here.
+    }
+  }
 }
 
 const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) => {
@@ -48,17 +68,27 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       characters: ctx.characters,
       submissionStatus: ctx.submission?.status ?? 'DRAFT',
       phase: ctx.phase
-        ? { key: ctx.phase.key, name: ctx.phase.name, status: ctx.phase.status, submissionsCloseAt: ctx.phase.submissionsCloseAt, open: phaseIsOpen(ctx.phase) }
+        ? {
+            key: ctx.phase.key,
+            name: ctx.phase.name,
+            status: ctx.phase.status,
+            submissionsCloseAt: ctx.phase.submissionsCloseAt,
+            open: phaseIsOpen(ctx.phase),
+            itemPoolMode: ctx.phase.itemPoolMode,
+          }
         : null,
       // Enough of guild_settings for the client to run @glps/core's computeCapacity
       // and validateSubmission live (§10) — never the full admin settings object.
       settings: ctx.settings
-        ? {
-            listSize: ctx.settings.listSize,
-            twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
-            allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
-            requireFullList: ctx.settings.requireFullList,
-          }
+        ? mergeSettings(
+            {
+              listSize: ctx.settings.listSize,
+              twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
+              allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
+              requireFullList: ctx.settings.requireFullList,
+            },
+            (ctx.phase?.settingsOverride as Partial<EffectiveSettings> | null) ?? null,
+          )
         : null,
     };
   });
@@ -69,7 +99,7 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       const ctx = await loadPlayerContext(tx, playerId);
       if (!ctx?.submission) return null;
       const entries = await tx.select().from(submissionEntries).where(eq(submissionEntries.submissionId, ctx.submission.id));
-      const lookup = await catalogLookup(tx, ctx.player.phaseId);
+      const lookup = await catalogLookup(tx, ctx.player.phaseId, ctx.phase!.itemPoolMode);
       const capacitySettings = { listSize: ctx.settings!.listSize, twohandConsumesOffhand: ctx.settings!.twohandConsumesOffhand };
       const asEntryInputs = entries.map((e) => ({
         characterId: e.characterId,
@@ -104,7 +134,11 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
         if (!ctx?.submission || !ctx.phase || !ctx.settings) throw notFound('Submission not found.');
         if (ctx.submission.status === 'SUBMITTED') throw new ApiError(409, 'SUBMISSION_LOCKED', 'This submission is already locked.');
 
-        const lookup = await catalogLookup(tx, ctx.player.phaseId);
+        if (ctx.phase.itemPoolMode === 'OPEN') {
+          await ensureOpenModeItemsExist(tx, body.data.entries, ctx.phase.gameVersion);
+        }
+
+        const lookup = await catalogLookup(tx, ctx.player.phaseId, ctx.phase.itemPoolMode);
         const reserved: ReservedCharacter[] = ctx.characters.map((c) => ({
           characterId: c.id,
           slotIndex: c.slotIndex as 1 | 2,
@@ -113,12 +147,15 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
         }));
 
         const validation = validateSubmission(body.data.entries as never, {
-          settings: {
-            listSize: ctx.settings.listSize,
-            twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
-            allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
-            requireFullList: ctx.settings.requireFullList,
-          },
+          settings: mergeSettings(
+            {
+              listSize: ctx.settings.listSize,
+              twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
+              allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
+              requireFullList: ctx.settings.requireFullList,
+            },
+            ctx.phase.settingsOverride as Partial<EffectiveSettings> | null,
+          ),
           reservedCharacters: reserved,
           lookupItem: lookup,
           submissionStatus: ctx.submission.status as 'DRAFT' | 'SUBMITTED',
@@ -165,7 +202,10 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
         }
 
         const entries = await tx.select().from(submissionEntries).where(eq(submissionEntries.submissionId, ctx.submission.id));
-        const lookup = await catalogLookup(tx, ctx.player.phaseId);
+        if (ctx.phase.itemPoolMode === 'OPEN') {
+          await ensureOpenModeItemsExist(tx, entries, ctx.phase.gameVersion);
+        }
+        const lookup = await catalogLookup(tx, ctx.player.phaseId, ctx.phase.itemPoolMode);
         const reserved: ReservedCharacter[] = ctx.characters.map((c) => ({
           characterId: c.id,
           slotIndex: c.slotIndex as 1 | 2,
@@ -175,12 +215,15 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
         const validation = validateSubmission(
           entries.map((e) => ({ characterId: e.characterId, list: e.list as 'MAIN' | 'OFF', rank: e.rank, slot: e.slot as never, itemId: e.itemId, spec: e.spec })),
           {
-            settings: {
-              listSize: ctx.settings.listSize,
-              twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
-              allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
-              requireFullList: ctx.settings.requireFullList,
-            },
+            settings: mergeSettings(
+              {
+                listSize: ctx.settings.listSize,
+                twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
+                allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
+                requireFullList: ctx.settings.requireFullList,
+              },
+              ctx.phase.settingsOverride as Partial<EffectiveSettings> | null,
+            ),
             reservedCharacters: reserved,
             lookupItem: lookup,
             submissionStatus: 'DRAFT',
@@ -228,6 +271,28 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
         .limit(300);
       return { items: rows };
     });
+  });
+
+  fastify.get<{ Params: { itemId: string } }>('/me/items/:itemId/preview', { config: { tenant: 'player' } }, async (request, reply) => {
+    const { playerId } = request.principal as { type: 'PLAYER'; playerId: string };
+    const itemId = Number(request.params.itemId);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item ID.'));
+    }
+    const phase = await withRequestTenant(db, request, async (tx) => {
+      const [player] = await tx.select().from(players).where(eq(players.id, playerId));
+      if (!player) return null;
+      const [phase] = await tx.select().from(phases).where(eq(phases.id, player.phaseId));
+      return phase ?? null;
+    });
+    if (!phase) return sendError(reply, notFound());
+    try {
+      const item = await fetchItemFromWowhead(itemId, phase.gameVersion);
+      return item;
+    } catch (err) {
+      if (err instanceof ApiError) return sendError(reply, err);
+      throw err;
+    }
   });
 };
 

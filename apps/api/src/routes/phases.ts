@@ -9,6 +9,7 @@ import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
 import { buildAddonExport } from '../services/addon-export.js';
 import { serializeAddonExportToLua } from '../services/lua-serializer.js';
+import { fetchItemFromWowhead } from '../services/wowhead-item.js';
 
 const zCreatePhase = z.object({
   key: z.string().min(1).max(40),
@@ -19,8 +20,22 @@ const zPatchPhase = z.object({
   name: z.string().min(1).max(120).optional(),
   status: z.enum(['DRAFT', 'OPEN', 'LOCKED', 'ARCHIVED']).optional(),
   submissionsCloseAt: z.string().datetime().nullable().optional(),
+  itemPoolMode: z.enum(['PREDEFINED', 'OPEN']).optional(),
+  settingsOverride: z
+    .object({ listSize: z.number().int().min(1).max(40), twohandConsumesOffhand: z.boolean(), allowAltOffspecInOffList: z.boolean(), requireFullList: z.boolean() })
+    .partial()
+    .nullable()
+    .optional(),
 });
 const zUnlockRequest = z.object({ reason: z.string().min(3).max(500) });
+const zAttachItem = z.object({
+  itemId: z.number().int().positive(),
+  name: z.string().min(1).max(200),
+  quality: z.number().int().min(0).max(7),
+  slot: z.string().min(1),
+  inventoryType: z.enum(['HEAD', 'NECK', 'SHOULDER', 'BACK', 'CHEST', 'WRIST', 'HANDS', 'WAIST', 'LEGS', 'FEET', 'FINGER', 'TRINKET', 'ONEHAND', 'TWOHAND', 'OFFHAND', 'SHIELD', 'RANGED', 'RELIC']),
+  icon: z.string().nullable(),
+});
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   DRAFT: ['OPEN'],
@@ -74,6 +89,8 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
             ...(body.data.submissionsCloseAt !== undefined
               ? { submissionsCloseAt: body.data.submissionsCloseAt ? new Date(body.data.submissionsCloseAt) : null }
               : {}),
+            ...(body.data.itemPoolMode !== undefined ? { itemPoolMode: body.data.itemPoolMode } : {}),
+            ...(body.data.settingsOverride !== undefined ? { settingsOverride: body.data.settingsOverride } : {}),
           })
           .where(eq(phases.id, request.params.id))
           .returning();
@@ -165,6 +182,80 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
           .limit(300);
         return { items: rows };
       });
+    },
+  );
+
+  fastify.post<{ Params: { id: string } }>(
+    '/phases/:id/items',
+    { config: { tenant: 'admin' } },
+    async (request, reply) => {
+      const body = zAttachItem.safeParse(request.body);
+      if (!body.success) return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item payload.', body.error.flatten()));
+      const guildId = request.tenant!.guildId;
+
+      const result = await withRequestTenant(db, request, async (tx) => {
+        const [phase] = await tx.select().from(phases).where(eq(phases.id, request.params.id));
+        if (!phase) return null;
+
+        await tx
+          .insert(items)
+          .values({
+            itemId: body.data.itemId,
+            name: body.data.name,
+            quality: body.data.quality,
+            slot: body.data.slot,
+            inventoryType: body.data.inventoryType,
+            icon: body.data.icon,
+          })
+          .onConflictDoUpdate({
+            target: items.itemId,
+            set: { name: body.data.name, quality: body.data.quality, slot: body.data.slot, inventoryType: body.data.inventoryType, icon: body.data.icon },
+          });
+        await tx
+          .insert(phaseItems)
+          .values({ guildId, phaseId: request.params.id, itemId: body.data.itemId, enabled: true })
+          .onConflictDoUpdate({
+            target: [phaseItems.phaseId, phaseItems.itemId],
+            set: { enabled: true },
+          });
+        return { ok: true };
+      });
+      if (!result) return sendError(reply, notFound());
+      return result;
+    },
+  );
+
+  fastify.delete<{ Params: { id: string; itemId: string } }>(
+    '/phases/:id/items/:itemId',
+    { config: { tenant: 'admin' } },
+    async (request) => {
+      await withRequestTenant(db, request, (tx) =>
+        tx
+          .update(phaseItems)
+          .set({ enabled: false })
+          .where(and(eq(phaseItems.phaseId, request.params.id), eq(phaseItems.itemId, Number(request.params.itemId)))),
+      );
+      return { ok: true };
+    },
+  );
+
+  fastify.post<{ Params: { id: string } }>(
+    '/phases/:id/items/fetch',
+    { config: { tenant: 'admin' } },
+    async (request, reply) => {
+      const body = z.object({ itemId: z.number().int().positive() }).safeParse(request.body);
+      if (!body.success) return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item ID.', body.error.flatten()));
+
+      const [phase] = await withRequestTenant(db, request, (tx) => tx.select().from(phases).where(eq(phases.id, request.params.id)));
+      if (!phase) return sendError(reply, notFound());
+
+      try {
+        const item = await fetchItemFromWowhead(body.data.itemId, phase.gameVersion);
+        return item;
+      } catch (err) {
+        if (err instanceof ApiError) return sendError(reply, err);
+        throw err;
+      }
     },
   );
 
