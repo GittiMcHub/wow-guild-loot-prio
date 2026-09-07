@@ -672,7 +672,29 @@ CREATE TABLE guild_settings (
   require_full_list              boolean  NOT NULL DEFAULT false,
   fulfill_cross_list             boolean  NOT NULL DEFAULT false,
   auto_lock_on_close             boolean  NOT NULL DEFAULT true,
+  -- 'TOP' | 'BOTTOM' — which end of the priority ladder already-owned
+  -- entries pin into (player-facing UX only, not consumed by the
+  -- resolver/validator). Extension beyond the original spec — see
+  -- docs/superpowers/specs/2026-09-07's sibling design doc for the
+  -- "already owned" feature itself (undated title: "owned-items priority").
+  owned_items_priority           text     NOT NULL DEFAULT 'TOP',
   updated_at                     timestamptz NOT NULL DEFAULT now()
+);
+
+-- One-time setup links for a new guild's first LOOT_MASTER, minted by
+-- POST /instance/guilds (§8.0/§3A.7). Same non-tenant-table pattern as
+-- `invites`/`access_tokens` below — resolving *which* guild a setup token
+-- belongs to has to happen before the tenant is known, via a SECURITY
+-- DEFINER function (apps/api/src/db/migrations/0002_token_resolution_functions.sql
+-- and its sibling in 0003). RLS enabled but not FORCEd, same reason.
+CREATE TABLE admin_setup_tokens (
+  id            uuid PRIMARY KEY,
+  guild_id      uuid NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+  admin_id      uuid NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+  token_hash    text UNIQUE NOT NULL,
+  expires_at    timestamptz NOT NULL,
+  used_at       timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE instance_admins (
@@ -700,11 +722,25 @@ CREATE TABLE phases (
   game_version  text NOT NULL,            -- 'classic-era' | 'sod' | 'cata' | 'retail'
   status        text NOT NULL,            -- 'DRAFT' | 'OPEN' | 'LOCKED' | 'ARCHIVED'
   submissions_close_at timestamptz,
+  -- 'PREDEFINED' (default) | 'OPEN'. PREDEFINED: players pick from
+  -- phase_items below, curated by the admin. OPEN: players type any item
+  -- ID; the server fetches+caches its name/icon/slot from Wowhead on
+  -- first use (apps/api/src/services/wowhead-item.ts) and validates
+  -- against the live-fetched shape instead of a curated catalog. Extension
+  -- beyond the original spec — the original spec assumed every phase's
+  -- catalog was pre-populated; see docs/superpowers/specs/2026-08-31-phase-item-pool-mode-design.md.
+  item_pool_mode text NOT NULL DEFAULT 'PREDEFINED',
+  -- Partial override of guild_settings for this phase only — same shape
+  -- as guild_settings' player-facing fields (listSize, twohandConsumesOffhand,
+  -- allowAltOffspecInOffList, requireFullList, ownedItemsPriority), merged
+  -- with the guild default at read time (apps/api/src/services/phase-settings.ts).
+  settings_override jsonb,
   created_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (guild_id, key)
 );
 
--- Item catalog, seeded from packages/item-data per phase.
+-- Item catalog, seeded from packages/item-data per phase, or fetched live
+-- from Wowhead on demand (see item_pool_mode above and §12).
 -- SHARED ACROSS ALL GUILDS. No guild_id, no RLS, read-only at runtime.
 CREATE TABLE items (
   item_id       integer PRIMARY KEY,
@@ -715,7 +751,16 @@ CREATE TABLE items (
   icon          text,
   source        text,                     -- boss / zone
   class_mask    integer,                  -- optional usability mask
-  phase_key     text                      -- nullable; item may span phases
+  phase_key     text,                     -- nullable; item may span phases
+  -- Set when this item isn't itself what drops — a tier token or quest
+  -- item produces it instead (admin-entered, PREDEFINED-catalog only).
+  -- Denormalized, not a FK: a token is never itself equippable and would
+  -- need nullable slot/inventory_type on this table. Extension beyond the
+  -- original spec — see docs/superpowers/specs/2026-09-07-token-and-quest-item-acquisition-design.md.
+  -- Surfaces in the addon export (§9) as an additive `tokens` reverse-index.
+  acquired_via_item_id integer,
+  acquired_via_name     text,
+  acquired_via_icon     text
 );
 CREATE INDEX ON items (phase_key);
 CREATE INDEX ON items USING gin (to_tsvector('simple', name));
@@ -793,6 +838,12 @@ CREATE TABLE submission_entries (
   item_id       integer NOT NULL REFERENCES items(item_id),
   spec          text NOT NULL,            -- resolved spec used for this entry
   note          text,
+  -- "Already owned" — a client-side UX flag only (§11.2's owned-items
+  -- pinning), not validated or consumed server-side beyond persisting it.
+  -- The priority ladder keeps owned entries as a contiguous block at
+  -- guild_settings.owned_items_priority's end by construction; nothing
+  -- here enforces that server-side. Extension beyond the original spec.
+  owned         boolean NOT NULL DEFAULT false,
   fulfilled_at  timestamptz,
   fulfilled_by_award uuid,
   UNIQUE (submission_id, list, rank),
@@ -910,13 +961,15 @@ All routes prefixed `/api`. Request/response schemas live in `packages/contracts
 
 ### 8.0 Instance admin (separate credential, separate cookie)
 
-| Method | Path | Notes |
-|---|---|---|
-| `POST` | `/instance/login`, `/instance/logout` | |
-| `GET/POST` | `/instance/guilds` | List / create guilds. Creation returns a one-time setup link for the first `LOOT_MASTER`. |
-| `PATCH` | `/instance/guilds/:id` | Suspend / reactivate / soft-delete; adjust quotas. |
-| `GET` | `/instance/guilds/:id/usage` | Counts only: phases, players, awards, storage. **No loot data.** |
-| `POST` | `/instance/guilds/:id/elevate` | Time-boxed support access, `{ reason, minutes }`. Dual-logged to the instance and guild audit trails; the guild's admins see a banner while it is active. |
+| Method | Path | Notes | Status |
+|---|---|---|---|
+| `POST` | `/instance/login`, `/instance/logout` | Cookies `glps_instance_at`/`glps_instance_rt`, claims carry `typ: 'instance'` so they can never be confused with a guild-admin token. | **Built.** |
+| `GET/POST` | `/instance/guilds` | List / create guilds. Creation returns a one-time setup link for the first `LOOT_MASTER` (`admin_setup_tokens`, §6), claimed at `GET/POST /setup/:token`. | **Built.** |
+| `PATCH` | `/instance/guilds/:id` | Suspend / reactivate / soft-delete; adjust quotas. | **Not built.** |
+| `GET` | `/instance/guilds/:id/usage` | Counts only: phases, players, awards, storage. **No loot data.** | **Not built.** |
+| `POST` | `/instance/guilds/:id/elevate` | Time-boxed support access, `{ reason, minutes }`. Dual-logged to the instance and guild audit trails; the guild's admins see a banner while it is active. | **Not built.** |
+
+See `docs/superpowers/specs/2026-09-05-instance-admin-guild-registration-design.md` for the design this was built from — it explicitly scoped the three "Not built" rows out.
 
 
 ### 8.1 Public / invite
@@ -934,7 +987,10 @@ All routes prefixed `/api`. Request/response schemas live in `packages/contracts
 | `GET` | `/me/submission` | Full entries for both lists, plus `capacity: { main: CapacityResult, off: CapacityResult }` so the client never recomputes the cap from assumptions. |
 | `PUT` | `/me/submission` | Replace-all draft save. Body: `{ entries: EntryInput[] }`. Rejected with `409 SUBMISSION_LOCKED` if `SUBMITTED`. Runs full validation (§10) and returns structured errors. |
 | `POST` | `/me/submission/submit` | Idempotent-by-version. Validates, sets `status=SUBMITTED`, `submitted_at`. **Immutable afterwards.** |
-| `GET` | `/me/items?slot=&q=&class=` | Catalog search for the picker, filtered to the phase. |
+| `GET` | `/me/items?slot=&q=&class=` | Catalog search for the picker, filtered to the phase. PREDEFINED-mode only — see `item_pool_mode` (§6). |
+| `GET` | `/me/items/:itemId/preview` | **Extension, OPEN-mode phases only.** Live-fetches one item from Wowhead (`fetchItemFromWowhead`), caching it into `items` on next save. 502 `WOWHEAD_FETCH_FAILED` if unreachable or non-equippable. |
+| `GET` | `/me/items/search?q=` | **Extension, OPEN-mode phases only.** Live name search against Wowhead, hard-filtered to equippable results only (no recipes/reagents). The client further filters to the slot being filled. |
+| `GET` | `/me/items/lookup?ids=1,2,3` | **Extension.** Batch read against the local `items` cache only (never hits Wowhead) — resolves name/icon/slot for entries reloaded from a saved OPEN-mode submission, which carry only an `itemId`. |
 | `GET` | `/me/submission/export.json` | Player's own copy (also renders a printable view in the SPA). |
 
 **Guild-wide read (same player token, subject to `GUILD_LIST_VISIBILITY`):**
@@ -955,8 +1011,12 @@ All routes prefixed `/api`. Request/response schemas live in `packages/contracts
 | `GET/PATCH` | `/admin/guild/settings` | The per-guild loot rules from §3A.5. Every change is audited with old and new values. |
 | `GET` | `/admin/guild/export` | Full guild data export (JSON) — portability and per-tenant backup. |
 | `GET/POST/DELETE` | `/admin/users` | Manage this guild's admin accounts. Cannot see or touch other guilds' accounts. |
-| `GET/POST/PATCH` | `/phases`, `/phases/:id` | status transitions `DRAFT→OPEN→LOCKED→ARCHIVED` |
-| `POST` | `/phases/:id/invites` | Body: `{ kind, count?, prefill?, label?, expiresAt?, maxUses? }`. Bulk create for `GENERIC`. Returns plaintext tokens once. |
+| `GET/POST/PATCH` | `/phases`, `/phases/:id` | status transitions `DRAFT→OPEN→LOCKED→ARCHIVED`. `POST` takes only `{ name, gameVersion }` — `key` is auto-derived server-side (slugified from `name`, collision-suffixed `-2`/`-3`/...), not client-supplied. `PATCH` also accepts `itemPoolMode` and `settingsOverride` (§6). |
+| `GET/POST` | `/phases/:id/items` | **Extension.** List / attach the PREDEFINED catalog for one phase (`phase_items`, §6). Attach body includes the full `FetchedItemData` shape plus an optional `acquiredVia: {itemId, name, icon} \| null`. |
+| `DELETE` | `/phases/:id/items/:itemId` | **Extension.** Soft-detach (`phase_items.enabled = false`), doesn't touch the shared `items` row. |
+| `POST` | `/phases/:id/items/fetch` | **Extension.** Live-fetches one equippable item from Wowhead for the admin to review before attaching. Same 502 behavior as the player-facing preview route above. |
+| `POST` | `/phases/:id/tokens/fetch` | **Extension.** Like `/items/fetch` but for the `acquiredVia` mapping — deliberately does **not** require the item to be equippable, since tokens/quest items never are. |
+| `POST` | `/phases/:id/invites` | Body: `{ kind, count?, prefill?, label?, expiresAt?, maxUses? }`. Bulk create for `GENERIC`. Returns plaintext tokens once. A `maxUses > 1` ("wildcard") invite lets that many different people claim the same link, each getting their own player/characters/token — the `usedCount` increment is an atomic conditional `UPDATE ... WHERE usedCount < maxUses`, not read-then-write, so it holds under real concurrency (many people clicking one link at once). |
 | `GET` | `/phases/:id/invites` | Status list; never returns plaintext. |
 | `POST` | `/invites/:id/revoke` | |
 | `GET` | `/phases/:id/submissions` | Summary: player, chars, status, entry counts, missing-list flags. |
@@ -1117,15 +1177,16 @@ Design constraints: dark, dense, keyboard-friendly, mobile-usable (loot masters 
 ### 11.1 Invite / onboarding (`/i/:token`)
 
 * **Targeted invite:** shows the pre-filled character(s) read-only; the player confirms and optionally corrects the off spec.
-* **Generic invite:** form for `displayName`, then 1–2 character cards (name, class dropdown → main spec / off spec dropdowns filtered by class, `is main character` toggle).
+* **Generic invite:** form for `displayName`, then 1–2 character cards (name, class dropdown → main spec / off spec dropdowns filtered by class, `is main character` toggle). Spec dropdowns are a static per-class list (classic-era's 3 specs/class — no Death Knight, no version-awareness; ruled acceptable since this app's class roster is already classic-only), not free text — a Shaman can only pick Elemental/Enhancement/Restoration.
 * On claim: full-screen "**Save this link**" panel with the personal URL, a QR code, a copy button, and a warning that it is shown only once (recoverable only by an admin).
 
 ### 11.2 List builder (`/b/:token`)
 
 The core UX. Two tabs: **Main list** and **Off list**.
 
-* Left: the 17 slots as rows. Each row has a character selector (only when 2 chars are reserved), an item picker (searchable by name **and by item ID**, showing icon + quality color + source boss), and a note field. Picking a two-handed weapon immediately greys the off-hand row for that character with an inline note ("blocked — two-handed weapon uses both hands"); the row stays visible rather than disappearing, so the rule is legible.
+* Left: the 17 slots as rows. Each row has a character selector (only when 2 chars are reserved), an item picker (searchable by name **and by item ID**, showing icon + quality color + source boss), and a note field. Picking a two-handed weapon immediately greys the off-hand row for that character with an inline note ("blocked — two-handed weapon uses both hands"); the row stays visible rather than disappearing, so the rule is legible. Every item, wherever it's shown (this picker, the ladder, the read-only submitted view), renders as `<icon> Name (itemId)` with a Wowhead-tooltip on hover (extension — see §12 for the live-fetch mechanism the tooltip domain param depends on). **OPEN-mode phases** (§6 `item_pool_mode`) replace the picker with a live Wowhead name/ID search, hard-filtered to the row's slot, one click from result to added.
 * Right: the **priority ladder** — a drag-and-drop ordered list of the chosen items, positions `1..effectiveCapacity`, with the rank number large and readable. The ladder length is **dynamic**: choosing a 2H shortens it from 17 to 16 rungs, with a visible "16 of 16 — two-handed weapon uses your off-hand slot" caption. Removing the 2H restores the rung. Drag reorder rewrites ranks contiguously.
+* **Already-owned pinning (extension).** Each ladder row has an "owned" checkbox. Checking it moves that entry to whichever end of the ladder `ownedItemsPriority` (guild/phase setting, §6) points at, as a contiguous block — e.g. with `TOP`, owned entries always occupy ranks `1..N`. A drag that would break the block invariant is rejected with an inline refusal message; reordering *within* the owned block or *within* the remaining block is unrestricted. This is a client-side UX rule only (`submission_entries.owned`, §6) — not validated server-side.
 * If a change would shrink capacity below the number of ranked entries, the picker refuses and names the entry to remove first. Ranked items are never silently dropped.
 * A persistent validation panel showing blocking errors and warnings.
 * Autosave draft (debounced `PUT /me/submission`), with a visible "Saved 12:04" indicator.
@@ -1163,9 +1224,11 @@ Read-only, reachable from the player's own list page. Same data, same components
 
 * `packages/item-data/<gameVersion>/<phaseKey>.json`: `[{ itemId, name, quality, inventoryType, slot, icon, source, classMask }]`.
 * Seeded into `items` by the `migrate`/`seed` job; idempotent upsert keyed on `item_id`.
-* Ship at least one real catalog so the system is demoable out of the box. If a full dataset is not available at build time, ship a **documented, clearly-labelled sample catalog** (`sample-p3.json`, ≥ 60 items covering all 17 slots) and a `pnpm run catalog:import <file.csv>` command for the guild to load their own. **Do not scrape any website at build or runtime.**
+* Ship at least one real catalog so the system is demoable out of the box. If a full dataset is not available at build time, ship a **documented, clearly-labelled sample catalog** (`sample-p3.json`, ≥ 60 items covering all 17 slots) and a `pnpm run catalog:import <file.csv>` command for the guild to load their own.
 * Optional (behind `BLIZZARD_CLIENT_ID/SECRET`, default off): a one-shot sync command against the Blizzard Game Data API to refresh names/icons. Must degrade silently when unset.
-* Item icons: reference by icon name; render from a local sprite/asset directory or fall back to a quality-colored placeholder. No runtime CDN dependency.
+* Item icons: reference by icon name; render from a local sprite/asset directory or fall back to a quality-colored placeholder for the seeded catalog. The runtime Wowhead lookup described in the deviation note below is the one exception to "no runtime CDN dependency" — its icons render directly from `wow.zamimg.com`.
+
+**Deviation from the original "do not scrape any website at build or runtime" rule above, made across several direct feature requests, each with its own design doc (not a unilateral call):** `apps/api/src/services/wowhead-item.ts` scrapes Wowhead item pages at runtime — both by numeric item ID (`fetchItemFromWowhead`, `fetchWowheadItemBasic` for non-equippable tokens/quest items) and by name (`searchWowheadByName`, parsing the same `WH.Gatherer.addData(3, ...)` envelope off the `/search?q=` page). This backs: the admin's "Fetch from Wowhead" button when attaching a PREDEFINED-catalog item or an `acquiredVia` token/quest-item mapping; OPEN-mode phases' entire item pool (§6 `item_pool_mode`); and the player-facing name/ID search in OPEN mode. It has no documented API and no stability guarantee — Wowhead changed their tooltip *widget's* URL under us once already this session (`wow.zamimg.com/js/power.js` → `/widgets/power.js`, see the README's key design notes); the item-page scraping could break the same way with no warning. If it does, `WOWHEAD_FETCH_FAILED` (502) is the failure mode every caller already handles — but nothing currently alerts anyone that it's broken. **Follow-up worth doing:** a monitoring/alerting hook, or at minimum a periodic smoke test against a known item ID, so this doesn't fail silently for weeks. See `docs/BACKLOG.md`.
 
 ---
 
@@ -1199,7 +1262,7 @@ Each milestone ends green: typecheck, lint, tests, and `docker compose up` worki
 | **M6** | Drop resolver UI, rolls, awards, revert, raid sessions, attendance, `explainDecision` + frozen snapshots | Playwright E2E: resolve tie → roll → award → entry fulfilled → re-resolve excludes it; every award renders a correct one-line summary naming BiS-Count exclusions |
 | **M6b** | Guild-wide read view (`/b/:token/guild`): lists, standings, loot feed with explanations; `GUILD_LIST_VISIBILITY` gating | A player token can read the guild matrix after close and is refused before it; standings and loot feed always readable |
 | **M7** | Export (`addon-lua`, `addon-json`, `json`, `csv`) incl. per-award `why`/`det`; import (dry-run + commit) incl. decision reconciliation | Round-trip test: export → import → zero diff; a mismatched imported decision lands in the review queue; `docs/ADDON_FORMAT.md` complete |
-| **M8** | Instance-admin screen (guild list, create, suspend, quotas, elevate-with-reason), hardening: rate limits, audit log UI, backups, README, `.env.example`, ops docs | Fresh-clone → `cp .env.example .env && docker compose up` → two guilds provisioned and usable in <5 min |
+| **M8** | Instance-admin screen (guild list, create, suspend, quotas, elevate-with-reason), hardening: rate limits, audit log UI, backups, README, `.env.example`, ops docs | Fresh-clone → `cp .env.example .env && docker compose up` → two guilds provisioned and usable in <5 min. **Partially done: guild list/create is built (§8.0); suspend/quotas/elevate, rate limits beyond the global default, audit log UI, and backups are not — see `docs/BACKLOG.md`.** |
 
 **Suggested parallelization:** M0b must complete before anything touching the database. M1 (pure core) can run fully in parallel with M0/M0b. M4 and M5 can run concurrently after M3. M7 depends only on M2 + M1.
 
@@ -1224,6 +1287,15 @@ Each milestone ends green: typecheck, lint, tests, and `docker compose up` worki
 | **D-11** | Should a two-handed weapon consume the off-hand slot, reducing the list to 16? | **Yes**, blocking. Reverts to a warning with full 17 capacity when disabled. | `twohand_consumes_offhand=true` |
 | **D-9** | Guild routing: path prefix (`/g/nightfall/...`) or subdomain (`nightfall.host`)? | **Path prefix** — no wildcard DNS, no wildcard TLS, works behind any reverse proxy, simpler local dev. Subdomains can be layered on later without a schema change. | — |
 | **D-10** | Should the item catalog be shared across guilds or per-guild? | **Shared**, read-only. Per-guild *enablement* via `phase_items` covers the real need (which items a phase accepts) without duplicating catalog rows per tenant. | — |
+
+**Decisions made this session, past the original table above** (kept separate rather than renumbered, so the D-N ids above stay stable references):
+
+| ID | Question | Resolved | Setting |
+|---|---|---|---|
+| D-12 | Which end of the priority ladder do already-owned items pin into? | **Configurable, default `TOP`.** Client-enforced contiguous-block invariant, not server-validated (§11.2, §6 `submission_entries.owned`). | `owned_items_priority` |
+| D-13 | Is scraping Wowhead at runtime acceptable, contradicting §12's original rule? | **Yes, as of this session** — see the deviation note in §12 for exactly what it backs and the risk it carries. Not resolved unilaterally: each use was a direct feature request with its own design doc. | — |
+| D-14 | Should a phase's item pool be a curated catalog or open (players type any item ID)? | **Both, per-phase.** `item_pool_mode = PREDEFINED` (default, curated) or `OPEN` (validated live against Wowhead instead). | `phases.item_pool_mode` |
+| D-15 | How does the system model a priority-list item that isn't itself what drops (tier token, quest item)? | **An admin-entered `acquiredVia` mapping on the catalog item**, denormalized cache fields, not validated against Wowhead's own (undocumented, unreliable) idea of what a token produces. Surfaces in the addon export as an additive `tokens` reverse-index. | `items.acquired_via_*` |
 
 Every setting in this table lives in `guild_settings` (§3A.5), **not** in the environment. The env vars of the same name only supply instance-wide defaults applied at guild creation; changing an env var never alters an existing guild. Read the settings once per request into a typed object and pass them into `packages/core` as `ResolveOptions` / validator options — never read env vars or the database inside `packages/core`. Document the instance defaults in `.env.example` with comments.
 

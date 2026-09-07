@@ -19,12 +19,23 @@ against a real Postgres instance:
 | DB schema, RLS (§3A.3), composite tenant FKs, `glps_migrate`/`glps_app` roles | **Done.** Verified live: RLS fails closed, pooled-connection isolation, cascade deletion, cross-guild uniqueness collisions. |
 | Auth: admin JWT (`gid` claim), invite/player bearer tokens, tenant hook | **Done.** |
 | Core API: invite claim, submission CRUD/submit, phase CRUD, admin matrix, drop resolver, rolls, awards, revert | **Done.** Exercises the §2.4 worked example and the tie→roll→award→revert flow through real HTTP requests. |
-| Web SPA — invite claim, player list builder (§11.2), admin matrix + drop resolver (§11.3) | **Done.** Drag-and-drop priority ladder (`@dnd-kit`, keyboard-operable), live client-side validation via `@glps/core` itself, matrix in all 3 views, resolver with roll/award/override/disenchant. Verified in a real Chromium browser against the real API — see Testing below. |
-| Guild-wide read view (§11.2b: `/b/:token/guild` lists/standings/loot feed), instance-admin screen, raid-session/attendance CRUD UI | **Not built.** |
-| Addon export/import (§9), CSV/JSON exports | **Export implemented** (`GET /phases/:id/export`, Lua and JSON formats). **Import not built.** `packages/contracts` already models the wire formats (`addon.ts`); `docs/ADDON_FORMAT.md` documents the full contract. |
-| Docker Compose / Dockerfiles | **Written, `docker compose config` validated.** Not run end-to-end — this dev environment has no Docker daemon available. |
+| Web SPA — invite claim, player list builder (§11.2), admin matrix + drop resolver (§11.3) | **Done**, plus several extensions beyond the original spec (see below). Drag-and-drop priority ladder (`@dnd-kit`, keyboard-operable), live client-side validation via `@glps/core` itself, matrix in all 3 views, resolver with roll/award/override/disenchant. Verified in a real Chromium browser against the real API — see Testing below. |
+| Instance-admin screen (§8.0) | **Partially built.** `/instance/login`, `/instance/logout`, `GET/POST /instance/guilds` (create returns a one-time setup link) are done, with their own web pages. `PATCH /instance/guilds/:id` (suspend/quotas), `GET .../usage`, `POST .../elevate` are **not built** — see `docs/superpowers/specs/2026-09-05-instance-admin-guild-registration-design.md`. |
+| Phase item catalog admin (fetch from Wowhead, attach/detach, per-phase settings override, OPEN item-pool mode, token/quest-item "acquired via" mapping) | **Done.** Not in the original spec — built this way because it turned out the catalog needed populating somehow; see the design docs listed below. |
+| Guild-wide read view (§11.2b: `/b/:token/guild` lists/standings/loot feed), raid-session/attendance CRUD UI | **Not built.** |
+| Addon export/import (§9), CSV/JSON exports | **Export implemented** (`GET /phases/:id/export`, Lua and JSON formats), including the additive `tokens` reverse-index for the acquired-via feature above. **Import not built.** `packages/contracts` already models the wire formats (`addon.ts`); `docs/ADDON_FORMAT.md` documents the full contract. |
+| Docker Compose / Dockerfiles | **Written and run end-to-end** in later sessions (a Docker daemon became available) — `docker compose up --build` with `docker-compose.override.yml` for dev (hot reload, web on 5173) works. `docker-compose.test-db.yml` is a dev-only convenience overlay to expose Postgres on the host for running `apps/api`'s test suite outside Docker. |
 
-See `git log` for what each milestone actually delivered and how it was verified.
+**Extensions beyond the original spec, built in response to direct feature requests, each with its own design doc under `docs/superpowers/specs/`:**
+
+- Class-restricted Main/Off spec dropdowns on the invite claim form (previously free-text).
+- Wowhead-backed item search in the OPEN-mode item picker (name or ID, slot-filtered, one-click add), plus name+id+icon+hover-tooltip rendering everywhere an item appears.
+- "Already owned" priority-ladder pinning — a player can mark an entry as already-owned, locking it into a contiguous block at either end of the ladder; which end is a new per-guild/per-phase setting (`ownedItemsPriority`).
+- Token/quest-item "acquired via" mapping (tier tokens, quest-starter items) — see `docs/superpowers/specs/2026-09-07-token-and-quest-item-acquisition-design.md`.
+- Wildcard (multi-use) invite links, surfaced in the admin UI (the backend already modeled `maxUses`).
+- Auto-generated phase `key` (slugified from the name, collision-safe) — the New Phase form no longer asks for one.
+
+See `docs/BACKLOG.md` for what's next, deferred code-review findings, and process notes worth knowing before extending this further. See `git log` for what each milestone actually delivered and how it was verified.
 
 ## Quickstart
 
@@ -64,6 +75,10 @@ apps/
 docs/
   SPEC.md            the full implementation spec this was built from
   ADDON_FORMAT.md     the in-game addon data contract (§9)
+  BACKLOG.md          what's next, deferred findings, process notes — start here
+  superpowers/
+    specs/           design docs for every feature built past the original spec
+    plans/           task-by-task implementation plans for the larger ones
 ```
 
 ## Testing
@@ -97,6 +112,35 @@ second submit is rejected as `SUBMISSION_LOCKED`.
 - **The resolver never touches the database.** `packages/core` is pure;
   `apps/api/src/services/{bis-count,claims}.ts` are the only places that
   translate live rows into the resolver's `ClaimInput[]` and back.
-- **Every route declares a `tenant` mode** (`public`/`invite`/`player`/`admin`/`instance`)
+- **Every route declares a `tenant` mode** (`public`/`invite`/`player`/`admin`/`instance`/`admin-setup`)
   in its Fastify route config — there's no default, so a new route can't
   silently skip tenant resolution (`apps/api/src/plugins/tenant.ts`).
+- **A fifth non-guild-scoped table joined the `invites`/`access_tokens`
+  exception this session: `admin_setup_tokens`** (the one-time link an
+  instance admin mints for a new guild's first `LOOT_MASTER`). Same reason,
+  same pattern — resolved via a `SECURITY DEFINER` SQL function before the
+  tenant is known. If you add another pre-tenant-resolution flow, follow
+  this precedent rather than inventing a new one.
+- **`items` is the one genuinely global, non-tenant table** (§3A.1/§6.1) —
+  no `guild_id`, shared read-only catalog across every guild. The
+  `acquired_via_item_id/name/icon` columns added for the token/quest-item
+  feature are denormalized on `items` rather than a self-referencing FK,
+  because a token is never itself equippable and would need nullable
+  `slot`/`inventory_type` on a table the rest of the codebase assumes
+  always has both — see the column comment in `apps/api/src/db/schema.ts`.
+- **Migration timestamps must be monotonically increasing, and `drizzle-kit
+  generate` does not guarantee that against a hand-edited prior migration.**
+  This bit three migrations in a row this session (`0006`, `0007`, `0008`)
+  — a wall-clock `when` in one migration's `meta/_journal.json` entry that's
+  later than "now" causes drizzle-orm's migrator to silently skip every
+  migration after it on the *first* run (subsequent runs look like they
+  work because the earlier ones are already marked applied — the bug only
+  shows up once, on a fresh database). After running `drizzle-kit
+  generate`, always check the new entry's `when` against the previous
+  one in `meta/_journal.json` and bump it if it's not strictly greater.
+- **Design docs precede any non-trivial feature.** Every extension listed
+  above has a spec under `docs/superpowers/specs/` (and some have a task
+  plan under `docs/superpowers/plans/`) written *before* implementation,
+  following the `superpowers:brainstorming` skill's process. Do the same
+  for the next one — it's cheap insurance against building the wrong
+  thing, and it's what makes `docs/BACKLOG.md` legible to the next agent.
