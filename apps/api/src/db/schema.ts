@@ -243,6 +243,11 @@ export const submissionEntries = pgTable(
       .references(() => items.itemId),
     spec: text('spec').notNull(),
     note: text('note'),
+    // Client-side UX flag only (§ "already owned items take top priority") —
+    // not enforced server-side; the priority ladder keeps owned entries as a
+    // contiguous top-of-list prefix by construction, this just persists which
+    // ones those are across reloads.
+    owned: boolean('owned').notNull().default(false),
     fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
     fulfilledByAward: uuid('fulfilled_by_award'),
   },

@@ -106,6 +106,7 @@ export const zSubmissionEntry = z.object({
   itemId: z.number().int(),
   spec: z.string(),
   note: z.string().nullable().optional(),
+  owned: z.boolean().optional(),
   fulfilledAt: z.string().datetime().nullable(),
 });
 export type SubmissionEntry = z.infer<typeof zSubmissionEntry>;
@@ -119,6 +120,9 @@ export const zEntryInput = z.object({
   itemId: z.number().int(),
   spec: z.string(),
   note: z.string().max(280).nullable().optional(),
+  // "Already owned" UX flag (§ priority ladder) — not validated server-side,
+  // see the owned column comment in apps/api/src/db/schema.ts.
+  owned: z.boolean().optional(),
 });
 export type EntryInputDto = z.infer<typeof zEntryInput>;
 

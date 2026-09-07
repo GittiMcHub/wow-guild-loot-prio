@@ -180,6 +180,7 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
               itemId: e.itemId,
               spec: e.spec,
               note: e.note ?? null,
+              owned: e.owned ?? false,
             })),
           );
         }

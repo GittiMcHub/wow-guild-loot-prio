@@ -28,6 +28,7 @@ interface Props {
   onReorder: (next: DraftEntry[]) => void;
   onRemove: (key: string) => void;
   onNoteChange: (key: string, note: string) => void;
+  onToggleOwned: (key: string) => void;
 }
 
 /**
@@ -45,6 +46,7 @@ export function PriorityLadder({
   onReorder,
   onRemove,
   onNoteChange,
+  onToggleOwned,
 }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -79,6 +81,7 @@ export function PriorityLadder({
                 characterName={characterNameById.get(entry.characterId) ?? '?'}
                 onRemove={() => onRemove(entry.key)}
                 onNoteChange={(note) => onNoteChange(entry.key, note)}
+                onToggleOwned={() => onToggleOwned(entry.key)}
               />
             ))}
           </ol>
@@ -98,6 +101,7 @@ function LadderRow({
   wowheadDomain,
   onRemove,
   onNoteChange,
+  onToggleOwned,
 }: {
   rank: number;
   entry: DraftEntry;
@@ -107,6 +111,7 @@ function LadderRow({
   wowheadDomain: string | undefined;
   onRemove: () => void;
   onNoteChange: (note: string) => void;
+  onToggleOwned: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.key });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -116,7 +121,7 @@ function LadderRow({
       ref={setNodeRef}
       style={style}
       className={`flex items-center gap-2 rounded border px-2 py-2 ${
-        blocked ? 'border-amber-700 bg-amber-950/30' : 'border-zinc-800 bg-zinc-900'
+        entry.owned ? 'border-zinc-800 bg-zinc-900/40 opacity-60' : blocked ? 'border-amber-700 bg-amber-950/30' : 'border-zinc-800 bg-zinc-900'
       } ${isDragging ? 'opacity-60' : ''}`}
     >
       <button
@@ -136,8 +141,13 @@ function LadderRow({
         <p className="truncate text-xs text-zinc-500">
           {entry.slot} · {characterName}
           {blocked && ' · blocked — two-handed weapon uses both hands'}
+          {entry.owned && ' · already owned'}
         </p>
       </div>
+      <label className="flex shrink-0 items-center gap-1 text-xs text-zinc-400">
+        <input type="checkbox" checked={entry.owned ?? false} onChange={onToggleOwned} />
+        owned
+      </label>
       <input
         value={entry.note ?? ''}
         onChange={(e) => onNoteChange(e.target.value)}

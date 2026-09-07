@@ -26,6 +26,7 @@ interface SubmissionEntryRow {
   itemId: number;
   spec: string;
   note: string | null;
+  owned?: boolean;
   fulfilledAt: string | null;
 }
 
@@ -40,6 +41,19 @@ const SLOT_LABEL: Record<Slot, string> = {
   TRINKET_1: 'Trinket 1', TRINKET_2: 'Trinket 2', MAIN_HAND: 'Main hand', OFF_HAND: 'Off hand', RANGED: 'Ranged',
 };
 
+/** Owned entries must form an unbroken prefix — no unowned item above one. */
+function ownedIsContiguousPrefix(entries: DraftEntry[]): boolean {
+  let seenUnowned = false;
+  for (const e of entries) {
+    if (e.owned) {
+      if (seenUnowned) return false;
+    } else {
+      seenUnowned = true;
+    }
+  }
+  return true;
+}
+
 function specFor(character: CharacterInfo, list: ListTier, useOffSpec: boolean): string {
   if (list === 'MAIN') return character.mainSpec;
   if (character.slotIndex === 1) return character.offSpec ?? character.mainSpec;
@@ -53,7 +67,7 @@ function toEntryInputs(state: BuilderState): EntryInputWithNote[] {
   const out: EntryInputWithNote[] = [];
   (['MAIN', 'OFF'] as const).forEach((list) => {
     state[list].forEach((e, i) => {
-      out.push({ characterId: e.characterId, list, rank: i + 1, slot: e.slot, itemId: e.itemId, spec: e.spec, note: e.note });
+      out.push({ characterId: e.characterId, list, rank: i + 1, slot: e.slot, itemId: e.itemId, spec: e.spec, note: e.note, owned: e.owned });
     });
   });
   return out;
@@ -92,7 +106,7 @@ export function ListBuilderPage({ token }: { token: string }) {
     setSeededFrom(submission.data);
     const next: BuilderState = { MAIN: [], OFF: [] };
     for (const e of [...submission.data.entries].sort((a, b) => a.rank - b.rank)) {
-      next[e.list].push({ key: e.id, characterId: e.characterId, slot: e.slot as Slot, itemId: e.itemId, spec: e.spec, note: e.note ?? undefined });
+      next[e.list].push({ key: e.id, characterId: e.characterId, slot: e.slot as Slot, itemId: e.itemId, spec: e.spec, note: e.note ?? undefined, owned: e.owned ?? false });
     }
     setState(next);
   }
@@ -251,11 +265,35 @@ export function ListBuilderPage({ token }: { token: string }) {
   }
 
   function reorder(next: DraftEntry[]) {
+    if (!ownedIsContiguousPrefix(next)) {
+      setRefusal('Owned items stay pinned to the top — drag within the owned group or the remaining group only.');
+      return;
+    }
+    setRefusal(null);
     setState((prev) => (prev ? { ...prev, [tab]: next } : prev));
   }
 
   function updateNote(key: string, note: string) {
     setState((prev) => (prev ? { ...prev, [tab]: prev[tab].map((e) => (e.key === key ? { ...e, note } : e)) } : prev));
+  }
+
+  /** Toggling owned moves the entry to the boundary between the owned and
+   * unowned blocks — the end of the owned block if now owned, which is the
+   * same position as the start of the unowned block if now unowned. */
+  function toggleOwned(key: string) {
+    setState((prev) => {
+      if (!prev) return prev;
+      const list = prev[tab];
+      const idx = list.findIndex((e) => e.key === key);
+      if (idx === -1) return prev;
+      const current = list[idx]!;
+      const entry = { ...current, owned: !current.owned };
+      const without = list.filter((_, i) => i !== idx);
+      const at = without.findIndex((e) => !e.owned);
+      const insertAt = at === -1 ? without.length : at;
+      const next = [...without.slice(0, insertAt), entry, ...without.slice(insertAt)];
+      return { ...prev, [tab]: next };
+    });
   }
 
   async function submit() {
@@ -320,7 +358,8 @@ export function ListBuilderPage({ token }: { token: string }) {
           </div>
         </div>
         <div>
-          <h2 className="mb-2 font-medium text-zinc-300">Priority ladder</h2>
+          <h2 className="mb-1 font-medium text-zinc-300">Priority ladder</h2>
+          <p className="mb-2 text-xs text-zinc-500">Already-owned items are pinned to the top of your list.</p>
           <PriorityLadder
             entries={state[tab]}
             effectiveCapacity={cap.effective}
@@ -331,6 +370,7 @@ export function ListBuilderPage({ token }: { token: string }) {
             onReorder={reorder}
             onRemove={removeEntry}
             onNoteChange={updateNote}
+            onToggleOwned={toggleOwned}
           />
         </div>
       </div>

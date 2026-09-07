@@ -29,6 +29,9 @@ export interface DraftEntry {
   itemId: number;
   spec: string;
   note?: string;
+  // "Already owned" — pinned to the top of the ladder as a contiguous
+  // block; see ListBuilderPage's toggleOwned/reorder for the invariant.
+  owned?: boolean;
   // The picker's full CatalogEntry, cached straight onto the entry when
   // added this session (never sent to the server — toEntryInputs drops
   // it). Entries loaded from a saved submission start without this; get

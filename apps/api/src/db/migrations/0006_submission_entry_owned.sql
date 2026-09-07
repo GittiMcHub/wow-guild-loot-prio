@@ -1,0 +1,1 @@
+ALTER TABLE "submission_entries" ADD COLUMN "owned" boolean DEFAULT false NOT NULL;

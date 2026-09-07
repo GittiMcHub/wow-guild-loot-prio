@@ -125,6 +125,9 @@ export interface EntryInput {
   slot: Slot;
   itemId: number;
   spec: string;
+  // "Already owned" UX flag — not used by capacity/validation logic, kept
+  // here only so callers can pass their full entry object through.
+  owned?: boolean;
 }
 
 export interface RollRecord {
