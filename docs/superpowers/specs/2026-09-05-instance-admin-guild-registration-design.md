@@ -320,7 +320,11 @@ existing routes.
   via `GET /setup/:token` → `POST /setup/:token` sets the password → the
   new guild-admin login (`/g/:slug/auth/login`) with that
   username/password succeeds → a second `POST /setup/:token` with the
-  same (now-used) token returns `410 SETUP_TOKEN_INVALID`.
+  same (now-used) token returns `401` (the `tenant: 'admin-setup'` hook
+  rejects the already-used token before the route body runs — implemented
+  this way instead of the `410 SETUP_TOKEN_INVALID` originally sketched
+  above, since the hook's `used_at` check already had to exist and a
+  second error path in the route would only duplicate it).
 - Extend `apps/api/test/tenancy.spec.ts`'s endpoint sweep if it
   enumerates routes automatically (check how it currently does this
   before assuming `instance`/`admin-setup` routes need special-casing

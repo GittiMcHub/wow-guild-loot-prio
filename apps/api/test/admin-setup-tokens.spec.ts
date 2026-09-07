@@ -45,9 +45,40 @@ describe('admin_setup_tokens (§ instance-admin guild registration)', () => {
     expect(rows[0]!.admin_id).toBe(adminId);
     expect(rows[0]!.used_at).toBeNull();
 
-    await app.sql`SELECT mark_admin_setup_token_used(${tokenId}::uuid)`;
+    const [firstClaim] = await app.sql`SELECT mark_admin_setup_token_used(${tokenId}::uuid) AS marked`;
+    expect(firstClaim!.marked).toBe(true);
     const [after] = await withTenant(migrate.db, guildId, (tx) => tx.select().from(adminSetupTokens).where(eq(adminSetupTokens.id, tokenId)));
     expect(after!.usedAt).not.toBeNull();
+  });
+
+  it('a second concurrent-style claim of an already-used token reports no row (race guard)', async () => {
+    const guildId = uuidv7();
+    const adminId = uuidv7();
+    const tokenId = uuidv7();
+    const plaintext = `plaintext-setup-token-${tokenId}`;
+
+    await migrate.db.insert(guilds).values({ id: guildId, slug: `setup-tok-race-${Date.now()}`, name: 'x', gameVersion: 'classic-era', status: 'ACTIVE' });
+    await migrate.db.insert(guildSettings).values({ guildId });
+    await withTenant(migrate.db, guildId, async (tx) => {
+      await tx.insert(admins).values({ id: adminId, guildId, username: 'admin', passwordHash: 'x', role: 'LOOT_MASTER' });
+      await tx.insert(adminSetupTokens).values({
+        id: tokenId,
+        guildId,
+        adminId,
+        tokenHash: hash(plaintext),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+    });
+
+    const [first] = await app.sql`SELECT mark_admin_setup_token_used(${tokenId}::uuid) AS marked`;
+    expect(first!.marked).toBe(true);
+
+    // The unconditional-UPDATE version of this function would happily
+    // "succeed" a second time (last write wins); the guarded version must
+    // report no row so the caller knows it lost the race.
+    const rows = await app.sql`SELECT mark_admin_setup_token_used(${tokenId}::uuid) AS marked`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.marked).toBeNull();
   });
 
   it('an unknown token hash resolves to zero rows', async () => {

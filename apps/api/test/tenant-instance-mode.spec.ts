@@ -1,16 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, type BuiltApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-import { signInstanceAccessToken } from '../src/services/jwt.js';
+import { signAdminAccessToken, signInstanceAccessToken } from '../src/services/jwt.js';
 import { APP_URL } from './helpers/fixtures.js';
 
 /**
- * `/api/admin/guild` is `tenant: 'admin'`; there is no `tenant: 'instance'`
- * route registered yet (Task 4 adds one) — so this test exercises the fix
- * directly against the tenant plugin by hitting a route this task doesn't
- * own. Instead, assert the plugin-level contract via a minimal inline route
- * registered just for this test, since app.ts wiring for `/instance/*`
- * lands in Task 4.
+ * `tenant: 'instance'` routes (e.g. `/api/instance/guilds`, registered by
+ * Task 4) and `tenant: 'admin'` routes (e.g. `/api/admin/guild`) are two
+ * separate principal kinds. This suite asserts the tenant hook actually
+ * rejects each principal's cookie on the other principal's route — not
+ * just that a garbage/unsigned token is rejected — in both directions.
  */
 describe('tenant.ts — instance mode is no longer a silent no-op', () => {
   let app: BuiltApp;
@@ -33,7 +32,7 @@ describe('tenant.ts — instance mode is no longer a silent no-op', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('rejects a guild-admin cookie presented on an instance-mode route', async () => {
+  it('rejects a garbage (unsigned) instance cookie', async () => {
     const res = await app.fastify.inject({
       method: 'GET',
       url: '/api/__test/instance-only',
@@ -51,5 +50,25 @@ describe('tenant.ts — instance mode is no longer a silent no-op', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().principal).toEqual({ type: 'INSTANCE_ADMIN', instanceAdminId: 'inst-1' });
+  });
+
+  it('rejects a real guild-admin access token presented as the instance-admin cookie on an instance-mode route', async () => {
+    const adminToken = await signAdminAccessToken({ sub: 'admin-1', gid: 'guild-1', role: 'LOOT_MASTER' }, loadConfig().jwtSecret);
+    const res = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/instance/guilds',
+      cookies: { glps_instance_at: adminToken },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('rejects a real instance-admin access token presented as the guild-admin cookie on an admin-mode route', async () => {
+    const instanceToken = await signInstanceAccessToken({ sub: 'inst-1' }, loadConfig().jwtSecret);
+    const res = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/admin/guild',
+      cookies: { glps_admin_at: instanceToken },
+    });
+    expect(res.statusCode).toBe(401);
   });
 });

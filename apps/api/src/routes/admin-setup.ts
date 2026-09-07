@@ -6,7 +6,7 @@ import { sql as rawSql } from 'drizzle-orm';
 import type { AppDb } from '../db/client.js';
 import { withRequestTenant } from '../db/request-tx.js';
 import { admins, guilds } from '../db/schema.js';
-import { ApiError, notFound, sendError } from '../errors.js';
+import { ApiError, notFound, sendError, unauthorized } from '../errors.js';
 
 const adminSetupRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) => {
   fastify.get('/setup/:token', { config: { tenant: 'admin-setup' } }, async (request, reply) => {
@@ -26,7 +26,15 @@ const adminSetupRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db
 
     const guildSlug = await withRequestTenant(db, request, async (tx) => {
       await tx.update(admins).set({ username: body.data.username, passwordHash }).where(eq(admins.id, adminId));
-      await tx.execute(rawSql`SELECT mark_admin_setup_token_used(${setupTokenId}::uuid)`);
+      // `mark_admin_setup_token_used` only flips `used_at` when it is still
+      // NULL (guards the race between two concurrent claims of the same
+      // token — §review fix). An empty result means we lost the race, so
+      // roll back this whole transaction, including the password write
+      // above, rather than leaving a half-claimed token.
+      const marked = (await tx.execute(
+        rawSql`SELECT mark_admin_setup_token_used(${setupTokenId}::uuid) AS marked`,
+      )) as unknown as { marked: boolean | null }[];
+      if (!marked[0]?.marked) throw unauthorized('This setup link has already been used.');
       const [guild] = await tx.select().from(guilds).where(eq(guilds.id, guildId));
       return guild!.slug;
     });

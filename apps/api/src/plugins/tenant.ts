@@ -66,10 +66,13 @@ interface PlayerTokenRow {
 }
 
 /**
- * Resolves the tenant from exactly one of three principals (§3A.2): an
- * invite token in the URL, a player bearer token, or the admin JWT's `gid`
- * claim. No handler may read a guild id from the request body, query
- * string, or path — this hook is the only place tenant identity is decided.
+ * Resolves the tenant/principal from exactly one of five kinds of request
+ * credential (§3A.2): an invite token in the URL, a player bearer token,
+ * the admin JWT's `gid` claim (`ADMIN`), a one-time setup token
+ * (`ADMIN_SETUP`), or the instance-admin JWT (`INSTANCE_ADMIN`, which has
+ * no guild — it operates instance-wide). No handler may read a guild id
+ * from the request body, query string, or path — this hook is the only
+ * place tenant identity is decided.
  */
 const tenantPlugin: FastifyPluginAsync<TenantPluginOptions> = async (fastify, opts) => {
   fastify.addHook('onRequest', async (request) => {
