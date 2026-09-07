@@ -1,0 +1,55 @@
+const QUALITY_COLOR: Record<number, string> = {
+  0: 'text-zinc-500',
+  1: 'text-zinc-200',
+  2: 'text-green-400',
+  3: 'text-blue-400',
+  4: 'text-purple-400',
+  5: 'text-orange-400',
+  6: 'text-red-400',
+  7: 'text-yellow-300',
+};
+
+export function iconUrl(icon: string | null | undefined): string | null {
+  return icon ? `https://wow.zamimg.com/images/wow/icons/medium/${icon}.jpg` : null;
+}
+
+interface Props {
+  itemId: number;
+  name?: string;
+  icon?: string | null;
+  quality?: number;
+  /** From wowheadDomainFor(phase.gameVersion) — omit to skip the tooltip link. */
+  domain?: string;
+  className?: string;
+}
+
+/**
+ * "name (id)" with icon, used everywhere an item appears (slot indicator,
+ * priority ladder, read-only submitted view). Wraps in a Wowhead-tooltip
+ * link when a domain is known — see wowhead-tooltips.ts.
+ */
+export function ItemLabel({ itemId, name, icon, quality, domain, className }: Props) {
+  const label = `${name ?? `Item ${itemId}`} (${itemId})`;
+  const colorClass = quality !== undefined ? (QUALITY_COLOR[quality] ?? 'text-zinc-200') : '';
+  const icon_ = iconUrl(icon);
+
+  const inner = (
+    <span className={`inline-flex min-w-0 items-center gap-1.5 ${className ?? ''}`}>
+      {icon_ && <img src={icon_} alt="" className="h-5 w-5 shrink-0 rounded" />}
+      <span className={`truncate ${colorClass}`}>{label}</span>
+    </span>
+  );
+
+  if (!domain) return inner;
+  return (
+    <a
+      href={`https://www.wowhead.com/item=${itemId}`}
+      target="_blank"
+      rel="noreferrer"
+      data-wowhead={`item=${itemId}&domain=${domain}`}
+      className="min-w-0"
+    >
+      {inner}
+    </a>
+  );
+}

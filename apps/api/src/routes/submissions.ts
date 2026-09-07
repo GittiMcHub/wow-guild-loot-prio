@@ -1,4 +1,4 @@
-import { and, eq, ilike, or } from 'drizzle-orm';
+import { and, eq, ilike, inArray, or } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { computeCapacity, validateSubmission, type CatalogItem, type ReservedCharacter } from '@glps/core';
 import { zPutSubmissionRequest } from '@glps/contracts';
@@ -72,6 +72,7 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
             key: ctx.phase.key,
             name: ctx.phase.name,
             status: ctx.phase.status,
+            gameVersion: ctx.phase.gameVersion,
             submissionsCloseAt: ctx.phase.submissionsCloseAt,
             open: phaseIsOpen(ctx.phase),
             itemPoolMode: ctx.phase.itemPoolMode,
@@ -315,6 +316,24 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       if (err instanceof ApiError) return sendError(reply, err);
       throw err;
     }
+  });
+
+  // Reads only the local `items` cache table (never hits Wowhead) — for
+  // displaying name/icon on entries a player already has, e.g. after
+  // reloading a saved OPEN-mode submission whose entries carry only an
+  // itemId. `items` has no guild_id (§6.1's deliberate global-catalog
+  // exception), so this is a plain lookup, not tenant-scoped.
+  fastify.get<{ Querystring: { ids?: string } }>('/me/items/lookup', { config: { tenant: 'player' } }, async (request) => {
+    const ids = (request.query.ids ?? '')
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (ids.length === 0) return { items: [] };
+    const rows = await db
+      .select({ itemId: items.itemId, name: items.name, quality: items.quality, icon: items.icon, slot: items.slot, inventoryType: items.inventoryType })
+      .from(items)
+      .where(inArray(items.itemId, ids));
+    return { items: rows };
   });
 };
 

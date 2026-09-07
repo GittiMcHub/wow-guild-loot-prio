@@ -29,6 +29,13 @@ export interface DraftEntry {
   itemId: number;
   spec: string;
   note?: string;
+  // The picker's full CatalogEntry, cached straight onto the entry when
+  // added this session (never sent to the server — toEntryInputs drops
+  // it). Entries loaded from a saved submission start without this; get
+  // it filled in from a /me/items/lookup fallback (see ListBuilderPage's
+  // catalogByItemId, which every read of an entry's item should go
+  // through instead of this field directly).
+  item?: CatalogEntry;
 }
 
 export type BuilderState = Record<ListTier, DraftEntry[]>;

@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GLPS — Guild Loot Priority System</title>
+    <!-- Wowhead's official tooltip widget: turns any element carrying a
+         data-wowhead="item=<id>&domain=<classic|tbc|cata>" attribute into a
+         hover tooltip with real item data (stats, sockets, etc). Exposes
+         window.WH.Tooltips, which self-observes DOM changes via
+         MutationObserver — apps/web/src/lib/wowhead-tooltips.ts's
+         refreshWowheadTooltips() is a defensive extra nudge, not load-bearing.
+         Note: the widget's own historical URL (wow.zamimg.com/js/power.js)
+         404s as of 2026-09 — confirmed live that /widgets/power.js is the
+         current one; re-verify if tooltips silently stop working again. -->
+    <script src="https://wow.zamimg.com/widgets/power.js"></script>
   </head>
   <body class="bg-zinc-950 text-zinc-100">
     <div id="root"></div>

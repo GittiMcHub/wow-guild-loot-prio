@@ -2,16 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { computeCapacity, validateSubmission, type EntryInput, type ListTier, type Slot } from '@glps/core';
 import { api, ApiError } from '../api';
+import { ItemLabel } from '../components/ItemLabel';
 import { ItemPicker } from '../components/ItemPicker';
 import { OpenItemPicker } from '../components/OpenItemPicker';
 import { PriorityLadder } from '../components/PriorityLadder';
 import { ALL_SLOTS, type BuilderState, type CatalogEntry, type CharacterInfo, type DraftEntry } from '../lib/builder-types';
+import { refreshWowheadTooltips, wowheadDomainFor } from '../lib/wowhead-tooltips';
 
 interface Me {
   player: { displayName: string };
   characters: CharacterInfo[];
   submissionStatus: 'DRAFT' | 'SUBMITTED';
-  phase: { name: string; status: string; submissionsCloseAt: string | null; open: boolean; itemPoolMode: 'PREDEFINED' | 'OPEN' } | null;
+  phase: { name: string; status: string; gameVersion: string; submissionsCloseAt: string | null; open: boolean; itemPoolMode: 'PREDEFINED' | 'OPEN' } | null;
   settings: { listSize: number; twohandConsumesOffhand: boolean; allowAltOffspecInOffList: boolean; requireFullList: boolean } | null;
 }
 
@@ -95,14 +97,51 @@ export function ListBuilderPage({ token }: { token: string }) {
     setState(next);
   }
 
-  const catalogByItemId = useMemo(() => new Map((catalog.data?.items ?? []).map((i) => [i.itemId, i])), [catalog.data]);
+  const baseCatalogByItemId = useMemo(() => new Map((catalog.data?.items ?? []).map((i) => [i.itemId, i])), [catalog.data]);
   const characterNameById = useMemo(() => new Map((me.data?.characters ?? []).map((c) => [c.id, c.name])), [me.data]);
+
+  // Entries loaded from a saved submission carry only an itemId (no
+  // `.item`) — this is normally only OPEN-mode entries, since PREDEFINED
+  // ones are already covered by baseCatalogByItemId, but the check isn't
+  // mode-gated so a stale/removed PREDEFINED catalog item still resolves.
+  const missingIds = useMemo(() => {
+    if (!state) return [];
+    const ids = new Set<number>();
+    (['MAIN', 'OFF'] as const).forEach((t) =>
+      state[t].forEach((e) => {
+        if (!e.item && !baseCatalogByItemId.has(e.itemId)) ids.add(e.itemId);
+      }),
+    );
+    return [...ids];
+  }, [state, baseCatalogByItemId]);
+
+  const lookup = useQuery<{ items: Omit<CatalogEntry, 'source' | 'classMask'>[] }>({
+    queryKey: ['me-items-lookup', token, missingIds.join(',')],
+    queryFn: () => api.get(`/me/items/lookup?ids=${missingIds.join(',')}`, token),
+    enabled: missingIds.length > 0,
+  });
+
+  // entry.item (picked this session, via the OpenItemPicker/ItemPicker's
+  // full CatalogEntry) takes priority — it's always fresher than a lookup
+  // cache — then the PREDEFINED catalog, then the /me/items/lookup
+  // fallback for OPEN-mode entries reloaded from a saved submission.
+  const catalogByItemId = useMemo(() => {
+    const merged = new Map(baseCatalogByItemId);
+    for (const i of lookup.data?.items ?? []) {
+      if (!merged.has(i.itemId)) merged.set(i.itemId, { ...i, source: null, classMask: null });
+    }
+    if (state) {
+      (['MAIN', 'OFF'] as const).forEach((t) => state[t].forEach((e) => e.item && merged.set(e.itemId, e.item)));
+    }
+    return merged;
+  }, [baseCatalogByItemId, lookup.data, state]);
 
   const lookupInventoryType = (itemId: number) => catalogByItemId.get(itemId)?.inventoryType ?? 'HEAD';
   const lookupItem = (itemId: number) => {
     const item = catalogByItemId.get(itemId);
     return item ? { itemId: item.itemId, inventoryType: item.inventoryType as never, classMask: item.classMask ?? undefined } : undefined;
   };
+  const wowheadDomain = wowheadDomainFor(me.data?.phase?.gameVersion);
 
   const capacity = useMemo(() => {
     if (!state || !me.data?.settings) return null;
@@ -152,11 +191,25 @@ export function ListBuilderPage({ token }: { token: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  // New item links render after first paint (picks, tab switches, catalog
+  // load) — the Wowhead widget only scans the DOM once on script load.
+  useEffect(() => {
+    refreshWowheadTooltips();
+  }, [state, catalogByItemId]);
+
   if (me.isLoading || submission.isLoading) return <Centered>Loading…</Centered>;
   if (me.error) return <Centered>{me.error instanceof ApiError ? me.error.message : 'This link is no longer valid.'}</Centered>;
 
   if (me.data!.submissionStatus === 'SUBMITTED') {
-    return <ReadOnlyView me={me.data!} entries={submission.data?.entries ?? []} catalogByItemId={catalogByItemId} characterNameById={characterNameById} />;
+    return (
+      <ReadOnlyView
+        me={me.data!}
+        entries={submission.data?.entries ?? []}
+        catalogByItemId={catalogByItemId}
+        characterNameById={characterNameById}
+        wowheadDomain={wowheadDomain}
+      />
+    );
   }
 
   if (!state || !capacity || !me.data!.settings) return <Centered>Loading…</Centered>;
@@ -168,7 +221,7 @@ export function ListBuilderPage({ token }: { token: string }) {
   function tryAdd(character: CharacterInfo, slot: Slot, item: CatalogEntry, useOffSpec: boolean) {
     setRefusal(null);
     const spec = specFor(character, tab, useOffSpec);
-    const newEntry: DraftEntry = { key: crypto.randomUUID(), characterId: character.id, slot, itemId: item.itemId, spec };
+    const newEntry: DraftEntry = { key: crypto.randomUUID(), characterId: character.id, slot, itemId: item.itemId, spec, item };
     const next: BuilderState = { ...state!, [tab]: [...state![tab], newEntry] };
 
     const settings = { listSize: me.data!.settings!.listSize, twohandConsumesOffhand: me.data!.settings!.twohandConsumesOffhand };
@@ -256,6 +309,8 @@ export function ListBuilderPage({ token }: { token: string }) {
                 catalog={catalog.data?.items ?? []}
                 itemPoolMode={me.data!.phase?.itemPoolMode ?? 'PREDEFINED'}
                 token={token}
+                catalogByItemId={catalogByItemId}
+                wowheadDomain={wowheadDomain}
                 onOpenAdd={(characterId) => setAddingFor({ slot, characterId, useOffSpec: false })}
                 onToggleOffSpec={(v) => setAddingFor((prev) => (prev ? { ...prev, useOffSpec: v } : prev))}
                 onCancelAdd={() => setAddingFor(null)}
@@ -272,6 +327,7 @@ export function ListBuilderPage({ token }: { token: string }) {
             blockedCharacterIds={blockedCharacterIds}
             catalogByItemId={catalogByItemId}
             characterNameById={characterNameById}
+            wowheadDomain={wowheadDomain}
             onReorder={reorder}
             onRemove={removeEntry}
             onNoteChange={updateNote}
@@ -311,6 +367,8 @@ function SlotRow({
   catalog,
   itemPoolMode,
   token,
+  catalogByItemId,
+  wowheadDomain,
   onOpenAdd,
   onToggleOffSpec,
   onCancelAdd,
@@ -325,6 +383,8 @@ function SlotRow({
   catalog: CatalogEntry[];
   itemPoolMode: 'PREDEFINED' | 'OPEN';
   token: string;
+  catalogByItemId: Map<number, CatalogEntry>;
+  wowheadDomain: string | undefined;
   onOpenAdd: (characterId: string) => void;
   onToggleOffSpec: (v: boolean) => void;
   onCancelAdd: () => void;
@@ -340,9 +400,11 @@ function SlotRow({
           const showOffSpecToggle = tab === 'OFF' && character.slotIndex === 2 && settings.allowAltOffspecInOffList && character.offSpec;
 
           if (existing) {
+            const item = existing.item ?? catalogByItemId.get(existing.itemId);
             return (
-              <p key={character.id} className="text-sm text-emerald-400">
-                ✓ {character.name} — item {existing.itemId}{' '}
+              <p key={character.id} className="flex flex-wrap items-center gap-1 text-sm text-emerald-400">
+                ✓ {character.name} —{' '}
+                <ItemLabel itemId={existing.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} />{' '}
                 <span className="text-zinc-500">(edit rank/remove in the ladder →)</span>
               </p>
             );
@@ -458,11 +520,13 @@ function ReadOnlyView({
   entries,
   catalogByItemId,
   characterNameById,
+  wowheadDomain,
 }: {
   me: Me;
   entries: SubmissionEntryRow[];
   catalogByItemId: Map<number, CatalogEntry>;
   characterNameById: Map<string, string>;
+  wowheadDomain: string | undefined;
 }) {
   const list = (tier: ListTier) => entries.filter((e) => e.list === tier).sort((a, b) => a.rank - b.rank);
   return (
@@ -479,14 +543,19 @@ function ReadOnlyView({
               <p className="text-sm text-zinc-500">No entries.</p>
             ) : (
               <ol className="space-y-1">
-                {list(tier).map((e) => (
-                  <li key={e.id} className="flex items-center justify-between rounded bg-zinc-950 px-3 py-2 text-sm">
-                    <span className="font-mono text-emerald-400">#{e.rank}</span>
-                    <span className="truncate px-2">{catalogByItemId.get(e.itemId)?.name ?? `Item ${e.itemId}`}</span>
-                    <span className="shrink-0 text-xs text-zinc-500">{characterNameById.get(e.characterId)}</span>
-                    {e.fulfilledAt && <span className="shrink-0 text-xs text-amber-400">received</span>}
-                  </li>
-                ))}
+                {list(tier).map((e) => {
+                  const item = catalogByItemId.get(e.itemId);
+                  return (
+                    <li key={e.id} className="flex items-center justify-between rounded bg-zinc-950 px-3 py-2 text-sm">
+                      <span className="font-mono text-emerald-400">#{e.rank}</span>
+                      <span className="min-w-0 flex-1 px-2">
+                        <ItemLabel itemId={e.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} />
+                      </span>
+                      <span className="shrink-0 text-xs text-zinc-500">{characterNameById.get(e.characterId)}</span>
+                      {e.fulfilledAt && <span className="shrink-0 text-xs text-amber-400">received</span>}
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </div>

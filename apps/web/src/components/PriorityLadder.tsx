@@ -15,6 +15,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { ItemLabel } from './ItemLabel';
 import type { CatalogEntry, DraftEntry } from '../lib/builder-types';
 
 interface Props {
@@ -23,6 +24,7 @@ interface Props {
   blockedCharacterIds: Set<string>;
   catalogByItemId: Map<number, CatalogEntry>;
   characterNameById: Map<string, string>;
+  wowheadDomain: string | undefined;
   onReorder: (next: DraftEntry[]) => void;
   onRemove: (key: string) => void;
   onNoteChange: (key: string, note: string) => void;
@@ -39,6 +41,7 @@ export function PriorityLadder({
   blockedCharacterIds,
   catalogByItemId,
   characterNameById,
+  wowheadDomain,
   onReorder,
   onRemove,
   onNoteChange,
@@ -71,7 +74,8 @@ export function PriorityLadder({
                 rank={i + 1}
                 entry={entry}
                 blocked={blockedCharacterIds.has(entry.characterId) && entry.slot === 'OFF_HAND'}
-                item={catalogByItemId.get(entry.itemId)}
+                item={entry.item ?? catalogByItemId.get(entry.itemId)}
+                wowheadDomain={wowheadDomain}
                 characterName={characterNameById.get(entry.characterId) ?? '?'}
                 onRemove={() => onRemove(entry.key)}
                 onNoteChange={(note) => onNoteChange(entry.key, note)}
@@ -91,6 +95,7 @@ function LadderRow({
   item,
   blocked,
   characterName,
+  wowheadDomain,
   onRemove,
   onNoteChange,
 }: {
@@ -99,6 +104,7 @@ function LadderRow({
   item: CatalogEntry | undefined;
   blocked: boolean;
   characterName: string;
+  wowheadDomain: string | undefined;
   onRemove: () => void;
   onNoteChange: (note: string) => void;
 }) {
@@ -124,7 +130,9 @@ function LadderRow({
       </button>
       <span className="w-8 shrink-0 font-mono text-lg text-emerald-400">#{rank}</span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm">{item?.name ?? `Item ${entry.itemId}`}</p>
+        <p className="truncate text-sm">
+          <ItemLabel itemId={entry.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} />
+        </p>
         <p className="truncate text-xs text-zinc-500">
           {entry.slot} · {characterName}
           {blocked && ' · blocked — two-handed weapon uses both hands'}

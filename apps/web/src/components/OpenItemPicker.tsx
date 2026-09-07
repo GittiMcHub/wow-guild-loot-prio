@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { iconUrl } from './ItemLabel';
 import type { CatalogEntry } from '../lib/builder-types';
 import { api, ApiError } from '../api';
 
@@ -30,20 +31,31 @@ const QUALITY_COLOR: Record<number, string> = {
   7: 'text-yellow-300',
 };
 
-function iconUrl(icon: string | null): string | null {
-  return icon ? `https://wow.zamimg.com/images/wow/icons/medium/${icon}.jpg` : null;
-}
-
 interface Props {
   token: string;
   onPick: (item: CatalogEntry) => void;
   onCancel: () => void;
 }
 
+function toCatalogEntry(item: FetchedItem): CatalogEntry {
+  return {
+    itemId: item.itemId,
+    name: item.name,
+    quality: item.quality,
+    slot: item.slot,
+    inventoryType: item.inventoryType,
+    icon: item.icon,
+    source: null,
+    classMask: null,
+  };
+}
+
 export function OpenItemPicker({ token, onPick, onCancel }: Props) {
   const [input, setInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [previewId, setPreviewId] = useState<number | null>(null);
+  const [pickingId, setPickingId] = useState<number | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
 
   const isNumeric = /^\d+$/.test(input);
 
@@ -66,17 +78,21 @@ export function OpenItemPicker({ token, onPick, onCancel }: Props) {
     retry: false,
   });
 
-  const pickPreviewed = (item: FetchedItem) =>
-    onPick({
-      itemId: item.itemId,
-      name: item.name,
-      quality: item.quality,
-      slot: item.slot,
-      inventoryType: item.inventoryType,
-      icon: item.icon,
-      source: null,
-      classMask: null,
-    });
+  /** Search results are already a confirmed match from a real Wowhead lookup
+   * (name, icon, quality all shown before the click) — fetch full details
+   * (for slot/inventoryType) and add in one click, no separate confirm step. */
+  async function pickFromSearch(result: SearchResult) {
+    setPickError(null);
+    setPickingId(result.itemId);
+    try {
+      const item = await api.get<FetchedItem>(`/me/items/${result.itemId}/preview`, token);
+      onPick(toCatalogEntry(item));
+    } catch (err) {
+      setPickError(err instanceof ApiError ? err.message : 'Could not look up this item.');
+    } finally {
+      setPickingId(null);
+    }
+  }
 
   return (
     <div className="rounded border border-zinc-700 bg-zinc-950 p-3">
@@ -86,6 +102,7 @@ export function OpenItemPicker({ token, onPick, onCancel }: Props) {
           onChange={(e) => {
             setInput(e.target.value);
             setPreviewId(null);
+            setPickError(null);
           }}
           placeholder="Item ID or name…"
           className="input"
@@ -116,17 +133,16 @@ export function OpenItemPicker({ token, onPick, onCancel }: Props) {
             <button
               key={item.itemId}
               type="button"
-              onClick={() => {
-                setDebouncedQuery('');
-                setPreviewId(item.itemId);
-              }}
-              className="flex w-full items-center gap-2 rounded bg-zinc-900 px-2 py-1.5 text-left text-sm hover:bg-zinc-800"
+              disabled={pickingId !== null}
+              onClick={() => pickFromSearch(item)}
+              className="flex w-full items-center gap-2 rounded bg-zinc-900 px-2 py-1.5 text-left text-sm hover:bg-zinc-800 disabled:opacity-60"
             >
               {iconUrl(item.icon) && <img src={iconUrl(item.icon)!} alt="" className="h-6 w-6 rounded" />}
               <span className={QUALITY_COLOR[item.quality] ?? 'text-zinc-200'}>{item.name}</span>
-              <span className="ml-auto text-xs text-zinc-600">#{item.itemId}</span>
+              <span className="ml-auto text-xs text-zinc-600">{pickingId === item.itemId ? 'Adding…' : `#${item.itemId}`}</span>
             </button>
           ))}
+          {pickError && <p className="text-sm text-red-400">{pickError}</p>}
         </div>
       )}
 
@@ -138,7 +154,7 @@ export function OpenItemPicker({ token, onPick, onCancel }: Props) {
       {preview.data && (
         <button
           type="button"
-          onClick={() => pickPreviewed(preview.data!)}
+          onClick={() => onPick(toCatalogEntry(preview.data!))}
           className="flex w-full items-center gap-2 rounded bg-emerald-700 px-3 py-2 text-left text-sm hover:bg-emerald-600"
         >
           {iconUrl(preview.data.icon) && <img src={iconUrl(preview.data.icon)!} alt="" className="h-6 w-6 rounded" />}

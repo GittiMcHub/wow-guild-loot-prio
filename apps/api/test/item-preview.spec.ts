@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { buildApp, type BuiltApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { withTenant } from '../src/db/client.js';
-import { admins, guildSettings, guilds, phases } from '../src/db/schema.js';
+import { admins, guildSettings, guilds, items, phases } from '../src/db/schema.js';
 import { uuidv7 } from '../src/db/uuid.js';
 import { APP_URL } from './helpers/fixtures.js';
 
@@ -157,6 +157,39 @@ describe('GET /me/items/:itemId/preview', () => {
       headers: { authorization: `Bearer ${playerToken}` },
     });
     expect(tooShort.statusCode).toBe(400);
+  });
+
+  it('looks up cached items by id without hitting Wowhead', async () => {
+    await app.db
+      .insert(items)
+      .values({ itemId: 40000, name: 'Test Lookup Item', quality: 3, slot: 'HEAD', inventoryType: 'HEAD', icon: 'inv_helmet_01' })
+      .onConflictDoNothing();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('should not be called')));
+
+    const res = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/me/items/lookup?ids=40000,999999',
+      headers: { authorization: `Bearer ${playerToken}` },
+    });
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
+    expect(res.json()).toEqual({
+      items: [{ itemId: 40000, name: 'Test Lookup Item', quality: 3, icon: 'inv_helmet_01', slot: 'HEAD', inventoryType: 'HEAD' }],
+    });
+  });
+
+  it('returns an empty list for a missing or empty ids param', async () => {
+    const missing = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/me/items/lookup',
+      headers: { authorization: `Bearer ${playerToken}` },
+    });
+    expect(missing.statusCode, JSON.stringify(missing.json())).toBe(200);
+    expect(missing.json()).toEqual({ items: [] });
+  });
+
+  it('rejects a lookup without a player session', async () => {
+    const res = await app.fastify.inject({ method: 'GET', url: '/api/me/items/lookup?ids=40000' });
+    expect(res.statusCode).toBe(401);
   });
 });
 
