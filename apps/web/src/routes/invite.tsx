@@ -10,6 +10,21 @@ interface InviteInfo {
 
 const CLASSES = ['WARRIOR', 'PALADIN', 'HUNTER', 'ROGUE', 'PRIEST', 'SHAMAN', 'MAGE', 'WARLOCK', 'DRUID'];
 
+// Classic-era talent trees (pre-Cata: 3 specs/class, no Death Knight). Every
+// class in this app is one of these 9 — see CLASSES above — so this table
+// doesn't need to vary by game version (confirmed with the user).
+const SPECS_BY_CLASS: Record<string, string[]> = {
+  WARRIOR: ['Arms', 'Fury', 'Protection'],
+  PALADIN: ['Holy', 'Protection', 'Retribution'],
+  HUNTER: ['Beast Mastery', 'Marksmanship', 'Survival'],
+  ROGUE: ['Assassination', 'Combat', 'Subtlety'],
+  PRIEST: ['Discipline', 'Holy', 'Shadow'],
+  SHAMAN: ['Elemental', 'Enhancement', 'Restoration'],
+  MAGE: ['Arcane', 'Fire', 'Frost'],
+  WARLOCK: ['Affliction', 'Demonology', 'Destruction'],
+  DRUID: ['Balance', 'Feral', 'Restoration'],
+};
+
 interface CharacterDraft {
   name: string;
   class: string;
@@ -110,7 +125,9 @@ export function InvitePage({ token }: { token: string }) {
             <Field label="Class">
               <select
                 value={char.class}
-                onChange={(e) => setChars((cs) => cs.map((c, j) => (j === i ? { ...c, class: e.target.value } : c)))}
+                onChange={(e) =>
+                  setChars((cs) => cs.map((c, j) => (j === i ? { ...c, class: e.target.value, mainSpec: '', offSpec: '' } : c)))
+                }
                 className="input"
               >
                 {CLASSES.map((c) => (
@@ -121,19 +138,35 @@ export function InvitePage({ token }: { token: string }) {
               </select>
             </Field>
             <Field label="Main spec">
-              <input
+              <select
                 required
                 value={char.mainSpec}
                 onChange={(e) => setChars((cs) => cs.map((c, j) => (j === i ? { ...c, mainSpec: e.target.value } : c)))}
                 className="input"
-              />
+              >
+                <option value="" disabled>
+                  Select a spec…
+                </option>
+                {(SPECS_BY_CLASS[char.class] ?? []).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Off spec">
-              <input
+              <select
                 value={char.offSpec}
                 onChange={(e) => setChars((cs) => cs.map((c, j) => (j === i ? { ...c, offSpec: e.target.value } : c)))}
                 className="input"
-              />
+              >
+                <option value="">None</option>
+                {(SPECS_BY_CLASS[char.class] ?? []).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </Field>
             {chars.length > 1 && (
               <button

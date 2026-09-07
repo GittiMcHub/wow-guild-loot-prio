@@ -122,6 +122,42 @@ describe('GET /me/items/:itemId/preview', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('returns matching items on a name search', async () => {
+    const html = `<html><script>WH.Gatherer.addData(3, 5, {"32235":{${CURSED_VISION_FIELDS}}});</script></html>`;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => html }));
+
+    const res = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/me/items/search?q=cursed',
+      headers: { authorization: `Bearer ${playerToken}` },
+    });
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
+    expect(res.json()).toEqual({
+      items: [{ itemId: 32235, name: 'Cursed Vision of Sargeras', quality: 4, icon: 'inv_misc_bandana_03' }],
+    });
+  });
+
+  it('rejects a search without a player session', async () => {
+    const res = await app.fastify.inject({ method: 'GET', url: '/api/me/items/search?q=cursed' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 400 on a missing or too-short query', async () => {
+    const missing = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/me/items/search',
+      headers: { authorization: `Bearer ${playerToken}` },
+    });
+    expect(missing.statusCode).toBe(400);
+
+    const tooShort = await app.fastify.inject({
+      method: 'GET',
+      url: '/api/me/items/search?q=a',
+      headers: { authorization: `Bearer ${playerToken}` },
+    });
+    expect(tooShort.statusCode).toBe(400);
+  });
 });
 
 describe('PATCH /phases/:id — item pool mode / settings override', () => {

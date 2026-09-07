@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchItemFromWowhead } from '../src/services/wowhead-item.js';
+import { fetchItemFromWowhead, searchWowheadByName } from '../src/services/wowhead-item.js';
 
 /**
  * Wowhead has no documented item API. The only currently-working feed is the
@@ -108,5 +108,70 @@ describe('fetchItemFromWowhead', () => {
     calls.length = 0;
     await fetchItemFromWowhead(1, 'tbc').catch(() => {});
     expect(calls[0]).toContain('tbc.wowhead.com');
+  });
+});
+
+/**
+ * Wowhead's search page (`/search?q=<name>`) embeds matching results with
+ * the exact same `WH.Gatherer.addData(3, <dbVersion>, {...})` envelope as a
+ * single item page — confirmed live against `/classic/search?q=thunderfury`
+ * on 2026-09-07, which returned an addData(3,...) call keyed by item 19019
+ * alongside an unrelated addData(6,...) spell call (the item's proc) that
+ * must be ignored. Non-equippable results (no jsonequip) are skipped rather
+ * than erroring, since a name search legitimately turns up reagents etc.
+ */
+describe('searchWowheadByName', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const SEARCH_PAGE_HTML = `<html><body><script>
+    WH.Gatherer.addData(3, 5, {
+      "19019":{"name_enus":"Thunderfury, Blessed Blade of the Windseeker","quality":5,"icon":"inv_sword_39","jsonequip":{"slotbak":13}},
+      "19020":{"name_enus":"Thunderfury Off-hand","quality":4,"icon":"inv_sword_04","jsonequip":{"slotbak":13}},
+      "6948":{"name_enus":"Hearthstone","quality":1,"icon":"inv_misc_rune_01"}
+    });
+    WH.Gatherer.addData(6, 5, {"27648":{"name_enus":"Thunderfury (proc)","icon":"spell_nature_cyclone"}});
+  </script></body></html>`;
+
+  it('returns every equippable item from the search results, skipping non-equippable ones', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => SEARCH_PAGE_HTML }));
+    const results = await searchWowheadByName('thunderfury', 'classic-era');
+    expect(results).toEqual([
+      { itemId: 19019, name: 'Thunderfury, Blessed Blade of the Windseeker', quality: 5, icon: 'inv_sword_39' },
+      { itemId: 19020, name: 'Thunderfury Off-hand', quality: 4, icon: 'inv_sword_04' },
+    ]);
+  });
+
+  it('returns an empty array when nothing matches', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '<html>No results</html>' }));
+    expect(await searchWowheadByName('zzznonexistent', 'classic-era')).toEqual([]);
+  });
+
+  it('caps results at 10', async () => {
+    const entries = Array.from({ length: 15 }, (_, i) => `"${1000 + i}":{"name_enus":"Item ${i}","quality":1,"icon":"icon","jsonequip":{"slotbak":1}}`).join(',');
+    const html = `<html><script>WH.Gatherer.addData(3, 5, {${entries}});</script></html>`;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => html }));
+    const results = await searchWowheadByName('item', 'classic-era');
+    expect(results.length).toBe(10);
+  });
+
+  it('throws WOWHEAD_FETCH_FAILED on a network error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    await expect(searchWowheadByName('thunderfury', 'classic-era')).rejects.toMatchObject({ code: 'WOWHEAD_FETCH_FAILED' });
+  });
+
+  it('URL-encodes the query and maps gameVersion to the correct subdomain', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        calls.push(url);
+        return Promise.resolve({ ok: true, text: async () => '<html></html>' });
+      }),
+    );
+    await searchWowheadByName('a & b', 'tbc');
+    expect(calls[0]).toContain('tbc.wowhead.com');
+    expect(calls[0]).toContain(encodeURIComponent('a & b'));
   });
 });

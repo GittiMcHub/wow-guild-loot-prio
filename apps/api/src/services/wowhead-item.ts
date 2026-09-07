@@ -103,39 +103,47 @@ const SLOT_BY_INVENTORY_TYPE: Record<InventoryType, string> = {
 const GATHERER_MARKER = 'WH.Gatherer.addData(3,';
 
 /**
- * Scans `html` for every `WH.Gatherer.addData(3, <n>, { ... });` call and
- * returns the parsed object for the first one that contains `itemId` as a
- * key. A single item page can carry several such calls (e.g. related items
- * shown elsewhere on the page), so we can't assume the first one is ours.
+ * Scans `html` for every `WH.Gatherer.addData(3, <n>, { ... });` call (type
+ * 3 = items — a page can also carry type 6 = spells, etc., which we ignore)
+ * and returns every successfully-parsed blob, each a map of item id (as a
+ * string key) to its raw Gatherer entry. A single page can carry several
+ * such calls (e.g. related items shown elsewhere on the page, or every
+ * match on a search-results page), so callers merge/search across all of
+ * them rather than assuming there's exactly one.
  */
-function extractGathererItem(html: string, itemId: number): Record<string, unknown> | null {
-  const key = String(itemId);
+function extractAllGathererBlobs(html: string): Record<string, unknown>[] {
+  const blobs: Record<string, unknown>[] = [];
   let searchFrom = 0;
 
   for (;;) {
     const markerIndex = html.indexOf(GATHERER_MARKER, searchFrom);
-    if (markerIndex === -1) return null;
+    if (markerIndex === -1) return blobs;
 
     const braceStart = html.indexOf('{', markerIndex);
-    if (braceStart === -1) return null;
+    if (braceStart === -1) return blobs;
 
     const braceEnd = findMatchingBrace(html, braceStart);
     searchFrom = markerIndex + GATHERER_MARKER.length;
     if (braceEnd === -1) continue;
 
     const blob = html.slice(braceStart, braceEnd + 1);
-    let parsed: unknown;
     try {
-      parsed = JSON.parse(blob);
+      const parsed: unknown = JSON.parse(blob);
+      if (parsed && typeof parsed === 'object') blobs.push(parsed as Record<string, unknown>);
     } catch {
       continue;
     }
-
-    if (parsed && typeof parsed === 'object' && key in (parsed as Record<string, unknown>)) {
-      const entry = (parsed as Record<string, unknown>)[key];
-      if (entry && typeof entry === 'object') return entry as Record<string, unknown>;
-    }
   }
+}
+
+/** Finds the first parsed blob (see `extractAllGathererBlobs`) containing `itemId` as a key. */
+function extractGathererItem(html: string, itemId: number): Record<string, unknown> | null {
+  const key = String(itemId);
+  for (const blob of extractAllGathererBlobs(html)) {
+    const entry = blob[key];
+    if (entry && typeof entry === 'object') return entry as Record<string, unknown>;
+  }
+  return null;
 }
 
 /** Finds the index of the `}` matching the `{` at `openIndex`, string-escape aware. */
@@ -229,4 +237,57 @@ export async function fetchItemFromWowhead(itemId: number, gameVersion: string):
     inventoryType,
     slot: SLOT_BY_INVENTORY_TYPE[inventoryType],
   };
+}
+
+export interface WowheadSearchResult {
+  itemId: number;
+  name: string;
+  quality: number;
+  icon: string | null;
+}
+
+const SEARCH_RESULTS_LIMIT = 10;
+
+/**
+ * Searches Wowhead by name and returns equippable matches. Reuses
+ * `fetchItemFromWowhead`'s scraping approach: the search-results page
+ * (`/search?q=<name>`) embeds matches in the same `WH.Gatherer.addData(3,
+ * ...)` envelope as a single item page — confirmed live against
+ * `/classic/search?q=thunderfury` on 2026-09-07. Non-equippable matches
+ * (no `jsonequip`, e.g. reagents) are skipped rather than treated as
+ * errors, since a name search legitimately turns up items this tool can't
+ * use alongside ones it can.
+ */
+export async function searchWowheadByName(query: string, gameVersion: string): Promise<WowheadSearchResult[]> {
+  const subdomain = SUBDOMAIN_BY_GAME_VERSION[gameVersion] ?? SUBDOMAIN_BY_GAME_VERSION.retail;
+  const url = `https://${subdomain}/search?q=${encodeURIComponent(query)}`;
+
+  let html: string;
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'GLPS-guild-loot-priority-system (item lookup)' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    html = await res.text();
+  } catch (err) {
+    throw new ApiError(502, 'WOWHEAD_FETCH_FAILED', `Could not reach Wowhead to search "${query}": ${(err as Error).message}`);
+  }
+
+  const results: WowheadSearchResult[] = [];
+  for (const blob of extractAllGathererBlobs(html)) {
+    for (const [key, raw] of Object.entries(blob)) {
+      if (results.length >= SEARCH_RESULTS_LIMIT) return results;
+      const itemId = Number(key);
+      if (!Number.isInteger(itemId) || !raw || typeof raw !== 'object') continue;
+      const entry = raw as Record<string, unknown>;
+      const jsonequip = entry.jsonequip;
+      if (!jsonequip || typeof jsonequip !== 'object') continue; // not equippable loot
+      const name = entry.name_enus;
+      const quality = entry.quality;
+      if (typeof name !== 'string' || typeof quality !== 'number') continue;
+      results.push({ itemId, name, quality, icon: typeof entry.icon === 'string' ? entry.icon : null });
+    }
+  }
+  return results;
 }

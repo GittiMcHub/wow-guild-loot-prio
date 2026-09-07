@@ -255,6 +255,7 @@ export function ListBuilderPage({ token }: { token: string }) {
                 settings={me.data!.settings!}
                 catalog={catalog.data?.items ?? []}
                 itemPoolMode={me.data!.phase?.itemPoolMode ?? 'PREDEFINED'}
+                token={token}
                 onOpenAdd={(characterId) => setAddingFor({ slot, characterId, useOffSpec: false })}
                 onToggleOffSpec={(v) => setAddingFor((prev) => (prev ? { ...prev, useOffSpec: v } : prev))}
                 onCancelAdd={() => setAddingFor(null)}
@@ -309,6 +310,7 @@ function SlotRow({
   settings,
   catalog,
   itemPoolMode,
+  token,
   onOpenAdd,
   onToggleOffSpec,
   onCancelAdd,
@@ -322,6 +324,7 @@ function SlotRow({
   settings: { allowAltOffspecInOffList: boolean };
   catalog: CatalogEntry[];
   itemPoolMode: 'PREDEFINED' | 'OPEN';
+  token: string;
   onOpenAdd: (characterId: string) => void;
   onToggleOffSpec: (v: boolean) => void;
   onCancelAdd: () => void;
@@ -354,7 +357,7 @@ function SlotRow({
                   </label>
                 )}
                 {itemPoolMode === 'OPEN' ? (
-                  <OpenItemPicker onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
+                  <OpenItemPicker token={token} onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
                 ) : (
                   <ItemPicker slot={slot} catalog={catalog} onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
                 )}

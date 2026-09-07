@@ -8,7 +8,7 @@ import { characters, guildSettings, items, phaseItems, phases, players, submissi
 import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
 import { mergeSettings, type EffectiveSettings } from '../services/phase-settings.js';
-import { fetchItemFromWowhead } from '../services/wowhead-item.js';
+import { fetchItemFromWowhead, searchWowheadByName } from '../services/wowhead-item.js';
 
 async function loadPlayerContext(tx: AppTx, playerId: string) {
   const [player] = await tx.select().from(players).where(eq(players.id, playerId));
@@ -289,6 +289,28 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
     try {
       const item = await fetchItemFromWowhead(itemId, phase.gameVersion);
       return item;
+    } catch (err) {
+      if (err instanceof ApiError) return sendError(reply, err);
+      throw err;
+    }
+  });
+
+  fastify.get<{ Querystring: { q?: string } }>('/me/items/search', { config: { tenant: 'player' } }, async (request, reply) => {
+    const { playerId } = request.principal as { type: 'PLAYER'; playerId: string };
+    const q = request.query.q?.trim();
+    if (!q || q.length < 2) {
+      return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Search query must be at least 2 characters.'));
+    }
+    const phase = await withRequestTenant(db, request, async (tx) => {
+      const [player] = await tx.select().from(players).where(eq(players.id, playerId));
+      if (!player) return null;
+      const [phase] = await tx.select().from(phases).where(eq(phases.id, player.phaseId));
+      return phase ?? null;
+    });
+    if (!phase) return sendError(reply, notFound());
+    try {
+      const items = await searchWowheadByName(q, phase.gameVersion);
+      return { items };
     } catch (err) {
       if (err instanceof ApiError) return sendError(reply, err);
       throw err;
