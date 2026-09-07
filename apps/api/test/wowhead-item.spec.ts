@@ -138,8 +138,8 @@ describe('searchWowheadByName', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => SEARCH_PAGE_HTML }));
     const results = await searchWowheadByName('thunderfury', 'classic-era');
     expect(results).toEqual([
-      { itemId: 19019, name: 'Thunderfury, Blessed Blade of the Windseeker', quality: 5, icon: 'inv_sword_39' },
-      { itemId: 19020, name: 'Thunderfury Off-hand', quality: 4, icon: 'inv_sword_04' },
+      { itemId: 19019, name: 'Thunderfury, Blessed Blade of the Windseeker', quality: 5, icon: 'inv_sword_39', inventoryType: 'ONEHAND', slot: 'WEAPON' },
+      { itemId: 19020, name: 'Thunderfury Off-hand', quality: 4, icon: 'inv_sword_04', inventoryType: 'ONEHAND', slot: 'WEAPON' },
     ]);
   });
 

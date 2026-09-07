@@ -134,7 +134,7 @@ describe('GET /me/items/:itemId/preview', () => {
     });
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
     expect(res.json()).toEqual({
-      items: [{ itemId: 32235, name: 'Cursed Vision of Sargeras', quality: 4, icon: 'inv_misc_bandana_03' }],
+      items: [{ itemId: 32235, name: 'Cursed Vision of Sargeras', quality: 4, icon: 'inv_misc_bandana_03', inventoryType: 'HEAD', slot: 'HEAD' }],
     });
   });
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { Slot } from '@glps/core';
 import { iconUrl } from './ItemLabel';
-import type { CatalogEntry } from '../lib/builder-types';
+import { itemLooksValidForSlot, type CatalogEntry } from '../lib/builder-types';
 import { api, ApiError } from '../api';
 
 interface FetchedItem {
@@ -18,6 +19,8 @@ interface SearchResult {
   name: string;
   quality: number;
   icon: string | null;
+  inventoryType: string;
+  slot: string;
 }
 
 const QUALITY_COLOR: Record<number, string> = {
@@ -33,6 +36,7 @@ const QUALITY_COLOR: Record<number, string> = {
 
 interface Props {
   token: string;
+  slot: Slot;
   onPick: (item: CatalogEntry) => void;
   onCancel: () => void;
 }
@@ -50,7 +54,7 @@ function toCatalogEntry(item: FetchedItem): CatalogEntry {
   };
 }
 
-export function OpenItemPicker({ token, onPick, onCancel }: Props) {
+export function OpenItemPicker({ token, slot, onPick, onCancel }: Props) {
   const [input, setInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [previewId, setPreviewId] = useState<number | null>(null);
@@ -70,6 +74,11 @@ export function OpenItemPicker({ token, onPick, onCancel }: Props) {
     queryFn: () => api.get<{ items: SearchResult[] }>(`/me/items/search?q=${encodeURIComponent(debouncedQuery)}`, token),
     enabled: debouncedQuery.length >= 2,
   });
+
+  // Hard filter (not just sorted-first like the PREDEFINED-catalog picker):
+  // a live Wowhead search can return genuinely irrelevant items for the
+  // slot being filled, unlike the guild's own curated catalog.
+  const matchingResults = useMemo(() => (search.data?.items ?? []).filter((i) => itemLooksValidForSlot(i, slot)), [search.data, slot]);
 
   const preview = useQuery<FetchedItem>({
     queryKey: ['open-item-preview', previewId],
@@ -128,8 +137,12 @@ export function OpenItemPicker({ token, onPick, onCancel }: Props) {
           {search.isError && (
             <p className="text-sm text-red-400">{search.error instanceof ApiError ? search.error.message : 'Could not search Wowhead.'}</p>
           )}
-          {search.data && search.data.items.length === 0 && <p className="text-sm text-zinc-500">No matches.</p>}
-          {search.data?.items.map((item) => (
+          {search.data && matchingResults.length === 0 && (
+            <p className="text-sm text-zinc-500">
+              {search.data.items.length === 0 ? 'No matches.' : 'No matching items for this slot.'}
+            </p>
+          )}
+          {matchingResults.map((item) => (
             <button
               key={item.itemId}
               type="button"

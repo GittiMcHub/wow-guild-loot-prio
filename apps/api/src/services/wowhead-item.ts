@@ -176,6 +176,28 @@ function findMatchingBrace(text: string, openIndex: number): number {
   return -1;
 }
 
+/**
+ * Parses one raw Gatherer entry (a value from a blob returned by
+ * `extractAllGathererBlobs`/`extractGathererItem`) into equippable-item
+ * shape, or null if it isn't equippable loot (no `jsonequip`, e.g. a
+ * recipe/reagent) or doesn't have the fields this tool understands. Shared
+ * by `fetchItemFromWowhead` (which turns a null into a thrown ApiError,
+ * since there it means "this specific requested item can't be used") and
+ * `searchWowheadByName` (which just skips it — a name search legitimately
+ * turns up items this tool can't use alongside ones it can).
+ */
+function parseEquippableEntry(raw: Record<string, unknown>): { name: string; quality: number; icon: string | null; inventoryType: InventoryType; slot: string } | null {
+  const name = raw.name_enus;
+  const quality = raw.quality;
+  const icon = raw.icon;
+  const jsonequip = raw.jsonequip;
+  const invTypeCode = jsonequip && typeof jsonequip === 'object' ? (jsonequip as Record<string, unknown>).slotbak : undefined;
+  if (typeof name !== 'string' || typeof quality !== 'number' || typeof invTypeCode !== 'number') return null;
+  const inventoryType = INVENTORY_TYPE_BY_CODE[invTypeCode];
+  if (!inventoryType) return null;
+  return { name, quality, icon: typeof icon === 'string' ? icon : null, inventoryType, slot: SLOT_BY_INVENTORY_TYPE[inventoryType] };
+}
+
 export async function fetchItemFromWowhead(itemId: number, gameVersion: string): Promise<FetchedItemData> {
   const subdomain = SUBDOMAIN_BY_GAME_VERSION[gameVersion] ?? SUBDOMAIN_BY_GAME_VERSION.retail;
   const url = `https://${subdomain}/item=${itemId}`;
@@ -201,42 +223,16 @@ export async function fetchItemFromWowhead(itemId: number, gameVersion: string):
     throw new ApiError(502, 'WOWHEAD_FETCH_FAILED', `Item ${itemId} was not found in Wowhead's response.`);
   }
 
-  const name = raw.name_enus;
-  const quality = raw.quality;
-  const icon = raw.icon;
-  const jsonequip = raw.jsonequip;
-  const invTypeCode =
-    jsonequip && typeof jsonequip === 'object' ? (jsonequip as Record<string, unknown>).slotbak : undefined;
-
-  if (typeof name !== 'string' || typeof quality !== 'number') {
-    throw new ApiError(502, 'WOWHEAD_FETCH_FAILED', `Unexpected Wowhead response shape for item ${itemId}.`);
-  }
-
-  if (typeof invTypeCode !== 'number') {
+  const parsed = parseEquippableEntry(raw);
+  if (!parsed) {
     throw new ApiError(
       502,
       'WOWHEAD_FETCH_FAILED',
-      `Item ${itemId} has no equip slot data — not equippable loot.`,
+      `Item ${itemId} has no usable equip slot data — not equippable loot, or an inventory type this tool doesn't handle yet.`,
     );
   }
 
-  const inventoryType = INVENTORY_TYPE_BY_CODE[invTypeCode];
-  if (!inventoryType) {
-    throw new ApiError(
-      502,
-      'WOWHEAD_FETCH_FAILED',
-      `Item ${itemId} has an unsupported inventory type (code ${invTypeCode}) — not equippable loot, or a type this tool doesn't handle yet.`,
-    );
-  }
-
-  return {
-    itemId,
-    name,
-    quality,
-    icon: typeof icon === 'string' ? icon : null,
-    inventoryType,
-    slot: SLOT_BY_INVENTORY_TYPE[inventoryType],
-  };
+  return { itemId, ...parsed };
 }
 
 export interface WowheadSearchResult {
@@ -244,6 +240,8 @@ export interface WowheadSearchResult {
   name: string;
   quality: number;
   icon: string | null;
+  inventoryType: InventoryType;
+  slot: string;
 }
 
 const SEARCH_RESULTS_LIMIT = 10;
@@ -280,13 +278,9 @@ export async function searchWowheadByName(query: string, gameVersion: string): P
       if (results.length >= SEARCH_RESULTS_LIMIT) return results;
       const itemId = Number(key);
       if (!Number.isInteger(itemId) || !raw || typeof raw !== 'object') continue;
-      const entry = raw as Record<string, unknown>;
-      const jsonequip = entry.jsonequip;
-      if (!jsonequip || typeof jsonequip !== 'object') continue; // not equippable loot
-      const name = entry.name_enus;
-      const quality = entry.quality;
-      if (typeof name !== 'string' || typeof quality !== 'number') continue;
-      results.push({ itemId, name, quality, icon: typeof entry.icon === 'string' ? entry.icon : null });
+      const parsed = parseEquippableEntry(raw as Record<string, unknown>);
+      if (!parsed) continue;
+      results.push({ itemId, ...parsed });
     }
   }
   return results;

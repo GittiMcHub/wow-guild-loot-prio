@@ -64,7 +64,7 @@ const SLOT_FAMILY: Record<string, string> = {
  * the item's actual inventoryType, so a wrong guess here never blocks a
  * valid pick.
  */
-export function itemLooksValidForSlot(item: CatalogEntry, slot: Slot): boolean {
+export function itemLooksValidForSlot(item: Pick<CatalogEntry, 'slot' | 'inventoryType'>, slot: Slot): boolean {
   if (slot === 'OFF_HAND') {
     return item.slot === 'OFF_HAND' || (item.slot === 'WEAPON' && item.inventoryType === 'ONEHAND');
   }

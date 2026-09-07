@@ -459,7 +459,7 @@ function SlotRow({
                   </label>
                 )}
                 {itemPoolMode === 'OPEN' ? (
-                  <OpenItemPicker token={token} onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
+                  <OpenItemPicker token={token} slot={slot} onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
                 ) : (
                   <ItemPicker slot={slot} catalog={catalog} onCancel={onCancelAdd} onPick={(item) => onPick(character, item)} />
                 )}
