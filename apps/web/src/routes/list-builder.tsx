@@ -444,7 +444,7 @@ function SlotRow({
             return (
               <p key={character.id} className="flex flex-wrap items-center gap-1 text-sm text-emerald-400">
                 ✓ {character.name} —{' '}
-                <ItemLabel itemId={existing.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} />{' '}
+                <ItemLabel itemId={existing.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} acquiredViaItemId={item?.acquiredViaItemId} acquiredViaName={item?.acquiredViaName} acquiredViaIcon={item?.acquiredViaIcon} />{' '}
                 <span className="text-zinc-500">(edit rank/remove in the ladder →)</span>
               </p>
             );
@@ -589,7 +589,7 @@ function ReadOnlyView({
                     <li key={e.id} className="flex items-center justify-between rounded bg-zinc-950 px-3 py-2 text-sm">
                       <span className="font-mono text-emerald-400">#{e.rank}</span>
                       <span className="min-w-0 flex-1 px-2">
-                        <ItemLabel itemId={e.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} />
+                        <ItemLabel itemId={e.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} acquiredViaItemId={item?.acquiredViaItemId} acquiredViaName={item?.acquiredViaName} acquiredViaIcon={item?.acquiredViaIcon} />
                       </span>
                       <span className="shrink-0 text-xs text-zinc-500">{characterNameById.get(e.characterId)}</span>
                       {e.fulfilledAt && <span className="shrink-0 text-xs text-amber-400">received</span>}

@@ -9,6 +9,8 @@ interface CatalogHit {
   quality: number;
   slot: string;
   source: string | null;
+  acquiredViaItemId: number | null;
+  acquiredViaName: string | null;
 }
 
 interface ResolvedClaim {
@@ -122,9 +124,16 @@ export function AdminResolverPage({ phaseId }: { phaseId: string }) {
           <ul className="mt-1 max-h-64 space-y-1 overflow-y-auto rounded border border-zinc-800 bg-zinc-900 p-2">
             {(search.data?.items ?? []).map((item) => (
               <li key={item.itemId}>
-                <button onClick={() => pickItem(item)} className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-800">
-                  <span className={QUALITY_COLOR[item.quality] ?? ''}>{item.name}</span>
-                  <span className="text-xs text-zinc-500">{item.source}</span>
+                <button onClick={() => pickItem(item)} className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-800">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className={QUALITY_COLOR[item.quality] ?? ''}>{item.name}</span>
+                    {item.acquiredViaItemId && (
+                      <span className="shrink-0 rounded bg-amber-950/40 px-1.5 py-0.5 text-xs text-amber-400">
+                        🎟 via {item.acquiredViaName ?? `Item ${item.acquiredViaItemId}`}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-xs text-zinc-500">{item.source}</span>
                 </button>
               </li>
             ))}
@@ -143,7 +152,14 @@ export function AdminResolverPage({ phaseId }: { phaseId: string }) {
       {selectedItem && result && (
         <div className="space-y-4">
           <div className="rounded border border-zinc-800 bg-zinc-900 p-3">
-            <p className={`font-medium ${QUALITY_COLOR[selectedItem.quality] ?? ''}`}>{selectedItem.name}</p>
+            <p className="flex flex-wrap items-center gap-1.5">
+              <span className={`font-medium ${QUALITY_COLOR[selectedItem.quality] ?? ''}`}>{selectedItem.name}</span>
+              {selectedItem.acquiredViaItemId && (
+                <span className="rounded bg-amber-950/40 px-1.5 py-0.5 text-xs text-amber-400">
+                  🎟 drops as {selectedItem.acquiredViaName ?? `Item ${selectedItem.acquiredViaItemId}`} (#{selectedItem.acquiredViaItemId})
+                </span>
+              )}
+            </p>
             {result.warnings.map((w) => (
               <p key={w} className="text-xs text-amber-400">
                 ⚠ {w}

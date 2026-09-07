@@ -119,6 +119,13 @@ export const items = pgTable('items', {
   source: text('source'),
   classMask: integer('class_mask'),
   phaseKey: text('phase_key'),
+  // Denormalized, not a FK to items.itemId: tokens/quest items are never
+  // equippable, so they'd need nullable slot/inventoryType on a table the
+  // rest of the codebase assumes always has both. See docs/superpowers/
+  // specs/2026-09-07-token-and-quest-item-acquisition-design.md.
+  acquiredViaItemId: integer('acquired_via_item_id'),
+  acquiredViaName: text('acquired_via_name'),
+  acquiredViaIcon: text('acquired_via_icon'),
 });
 
 export const phaseItems = pgTable(

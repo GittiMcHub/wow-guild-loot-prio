@@ -36,6 +36,14 @@ GLPS_DB = {
       { c = "Cairne",    t = "OFF",  r = 2,  s = "MAIN_HAND", p = "cairne#1234" },
     },
   },
+  -- optional: token/quest item ID -> the real item ID(s) it produces, for
+  -- items whose priority-list entry isn't itself what drops (tier tokens,
+  -- quest items). Only present when at least one item in `items` has such
+  -- a mapping configured. When the addon sees itemId 49888 drop, it should
+  -- look it up here first — 49888 itself never appears as a key in `items`.
+  tokens = {
+    [49888] = { 19019 },  -- "Helm of the Fallen Champion" token -> real item 19019
+  },
   awarded = {
     { item = 19019, c = "Thrall", at = 1756512345,
       win = "ROLL",
@@ -68,6 +76,10 @@ Rules:
   reworded by the addon, so wording is identical everywhere it appears.
 - Fulfilled entries are excluded from `items` but listed in `awarded` with
   their frozen explanation.
+- `tokens` is additive and optional — omitted entirely when no item in the
+  phase has a token/quest-item mapping configured. An addon that doesn't
+  know about it is unaffected for ordinary (non-token) drops; it just can't
+  resolve token drops until it adds the lookup.
 
 ## Export: `format=addon-json`
 

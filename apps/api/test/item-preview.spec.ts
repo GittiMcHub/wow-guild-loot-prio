@@ -173,7 +173,7 @@ describe('GET /me/items/:itemId/preview', () => {
     });
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
     expect(res.json()).toEqual({
-      items: [{ itemId: 40000, name: 'Test Lookup Item', quality: 3, icon: 'inv_helmet_01', slot: 'HEAD', inventoryType: 'HEAD' }],
+      items: [{ itemId: 40000, name: 'Test Lookup Item', quality: 3, icon: 'inv_helmet_01', slot: 'HEAD', inventoryType: 'HEAD', acquiredViaItemId: null, acquiredViaName: null, acquiredViaIcon: null }],
     });
   });
 

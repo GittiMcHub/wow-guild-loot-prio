@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { loadCatalog } from '@glps/item-data';
 import { zAddonExport } from '@glps/contracts';
@@ -45,6 +46,58 @@ describe('buildAddonExport', () => {
     });
 
     await deleteGuild(db, guildId);
+  });
+
+  it('includes a tokens reverse-index when an item has an acquiredVia mapping, omits it otherwise', async () => {
+    const guildId = uuidv7();
+    const phaseId = uuidv7();
+    await db.insert(guilds).values({ id: guildId, slug: `addon-export-tokens-${Date.now()}`, name: 'Addon Export Tokens Test', gameVersion: 'classic-era', status: 'ACTIVE' });
+    await db.insert(guildSettings).values({ guildId });
+    await db.insert(items).values(catalog.map((i) => ({ ...i, phaseKey: 'P3' }))).onConflictDoNothing({ target: items.itemId });
+    await db.update(items).set({ acquiredViaItemId: 49888, acquiredViaName: 'Helm of the Fallen Champion', acquiredViaIcon: 'inv_helmet_87' }).where(eq(items.itemId, neckItem.itemId));
+
+    await withTenant(db, guildId, async (tx) => {
+      await tx.insert(phases).values({ id: phaseId, guildId, key: 'P3', name: 'Phase 3', gameVersion: 'classic-era', status: 'OPEN' });
+      await tx.insert(phaseItems).values({ guildId, phaseId, itemId: neckItem.itemId, enabled: true });
+
+      const playerId = uuidv7();
+      await tx.insert(players).values({ id: playerId, guildId, phaseId, displayName: 'Thrall', discordTag: 'thrall#1234' });
+      const characterId = uuidv7();
+      await tx.insert(characters).values({ id: characterId, guildId, playerId, name: 'Thrall', class: 'WARRIOR', mainSpec: 'FURY', offSpec: 'PROTECTION', isMainCharacter: true, slotIndex: 1 });
+      const submissionId = uuidv7();
+      await tx.insert(submissions).values({ id: submissionId, guildId, phaseId, playerId, status: 'SUBMITTED', version: 1 });
+      await tx.insert(submissionEntries).values({ id: uuidv7(), guildId, submissionId, characterId, list: 'MAIN', rank: 1, slot: 'NECK', itemId: neckItem.itemId, spec: 'FURY' });
+
+      const tree = await buildAddonExport(tx, guildId, phaseId);
+      expect(() => zAddonExport.parse(tree)).not.toThrow();
+      expect(tree.tokens).toEqual({ '49888': [neckItem.itemId] });
+    });
+
+    // Reset so this catalog row doesn't leak the mapping into other tests
+    // sharing the same global `items` table (catalog rows are never deleted).
+    await db.update(items).set({ acquiredViaItemId: null, acquiredViaName: null, acquiredViaIcon: null }).where(eq(items.itemId, neckItem.itemId));
+
+    const guildId2 = uuidv7();
+    const phaseId2 = uuidv7();
+    await db.insert(guilds).values({ id: guildId2, slug: `addon-export-no-tokens-${Date.now()}`, name: 'Addon Export No Tokens Test', gameVersion: 'classic-era', status: 'ACTIVE' });
+    await db.insert(guildSettings).values({ guildId: guildId2 });
+    await withTenant(db, guildId2, async (tx) => {
+      await tx.insert(phases).values({ id: phaseId2, guildId: guildId2, key: 'P3', name: 'Phase 3', gameVersion: 'classic-era', status: 'OPEN' });
+      await tx.insert(phaseItems).values({ guildId: guildId2, phaseId: phaseId2, itemId: neckItem.itemId, enabled: true });
+      const playerId = uuidv7();
+      await tx.insert(players).values({ id: playerId, guildId: guildId2, phaseId: phaseId2, displayName: 'Cairne', discordTag: 'cairne#1234' });
+      const characterId = uuidv7();
+      await tx.insert(characters).values({ id: characterId, guildId: guildId2, playerId, name: 'Cairne', class: 'WARRIOR', mainSpec: 'FURY', offSpec: 'PROTECTION', isMainCharacter: true, slotIndex: 1 });
+      const submissionId = uuidv7();
+      await tx.insert(submissions).values({ id: submissionId, guildId: guildId2, phaseId: phaseId2, playerId, status: 'SUBMITTED', version: 1 });
+      await tx.insert(submissionEntries).values({ id: uuidv7(), guildId: guildId2, submissionId, characterId, list: 'MAIN', rank: 1, slot: 'NECK', itemId: neckItem.itemId, spec: 'FURY' });
+
+      const tree = await buildAddonExport(tx, guildId2, phaseId2);
+      expect(tree.tokens).toBeUndefined();
+    });
+
+    await deleteGuild(db, guildId);
+    await deleteGuild(db, guildId2);
   });
 
   it('sorts players by character name and produces byte-identical output across repeated calls (determinism)', async () => {
@@ -218,6 +271,30 @@ describe('serializeAddonExportToLua', () => {
     expect(lua).toContain('[19019] = {');
     expect(lua).toContain('c = "Thrall"');
     // Must be syntactically closed: opening/closing brace counts match.
+    expect((lua.match(/{/g) ?? []).length).toBe((lua.match(/}/g) ?? []).length);
+    expect(lua).not.toContain('tokens ='); // omitted entirely when tree.tokens is undefined
+  });
+
+  it('emits a tokens table when present', () => {
+    const lua = serializeAddonExportToLua(
+      {
+        schema: 1,
+        guild: 'nightfall',
+        guildId: '00000000-0000-7000-8000-000000000000',
+        phase: 'P3',
+        generatedAt: 1756512000,
+        checksum: 'sha256:abc',
+        players: {},
+        items: { '19019': [] },
+        tokens: { '49888': [19019] },
+        awarded: [],
+        bisCounts: {},
+        config: { equalDistribution: 'PHASE', bisCountScope: 'PLAYER', weightOff: 0 },
+      },
+      'P3',
+    );
+    expect(lua).toContain('tokens = {');
+    expect(lua).toContain('[49888] = {');
     expect((lua.match(/{/g) ?? []).length).toBe((lua.match(/}/g) ?? []).length);
   });
 });

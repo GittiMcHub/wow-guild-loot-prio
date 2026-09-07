@@ -266,6 +266,9 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
           icon: items.icon,
           source: items.source,
           classMask: items.classMask,
+          acquiredViaItemId: items.acquiredViaItemId,
+          acquiredViaName: items.acquiredViaName,
+          acquiredViaIcon: items.acquiredViaIcon,
         })
         .from(phaseItems)
         .innerJoin(items, eq(items.itemId, phaseItems.itemId))
@@ -331,7 +334,17 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       .filter((n) => Number.isInteger(n) && n > 0);
     if (ids.length === 0) return { items: [] };
     const rows = await db
-      .select({ itemId: items.itemId, name: items.name, quality: items.quality, icon: items.icon, slot: items.slot, inventoryType: items.inventoryType })
+      .select({
+        itemId: items.itemId,
+        name: items.name,
+        quality: items.quality,
+        icon: items.icon,
+        slot: items.slot,
+        inventoryType: items.inventoryType,
+        acquiredViaItemId: items.acquiredViaItemId,
+        acquiredViaName: items.acquiredViaName,
+        acquiredViaIcon: items.acquiredViaIcon,
+      })
       .from(items)
       .where(inArray(items.itemId, ids));
     return { items: rows };

@@ -50,6 +50,13 @@
       "when": 1788800100000,
       "tag": "0006_submission_entry_owned",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788800200000,
+      "tag": "0007_items_acquired_via",
+      "breakpoints": true
     }
   ]
 }

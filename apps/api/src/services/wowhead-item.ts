@@ -198,18 +198,17 @@ function parseEquippableEntry(raw: Record<string, unknown>): { name: string; qua
   return { name, quality, icon: typeof icon === 'string' ? icon : null, inventoryType, slot: SLOT_BY_INVENTORY_TYPE[inventoryType] };
 }
 
-export async function fetchItemFromWowhead(itemId: number, gameVersion: string): Promise<FetchedItemData> {
+/** Fetches and returns the raw HTML of an item's Wowhead page, for scraping by either fetch path below. */
+async function fetchItemPageHtml(itemId: number, gameVersion: string): Promise<string> {
   const subdomain = SUBDOMAIN_BY_GAME_VERSION[gameVersion] ?? SUBDOMAIN_BY_GAME_VERSION.retail;
   const url = `https://${subdomain}/item=${itemId}`;
-
-  let html: string;
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'GLPS-guild-loot-priority-system (item lookup)' },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    html = await res.text();
+    return await res.text();
   } catch (err) {
     throw new ApiError(
       502,
@@ -217,6 +216,10 @@ export async function fetchItemFromWowhead(itemId: number, gameVersion: string):
       `Could not reach Wowhead for item ${itemId}: ${(err as Error).message}`,
     );
   }
+}
+
+export async function fetchItemFromWowhead(itemId: number, gameVersion: string): Promise<FetchedItemData> {
+  const html = await fetchItemPageHtml(itemId, gameVersion);
 
   const raw = extractGathererItem(html, itemId);
   if (!raw) {
@@ -233,6 +236,38 @@ export async function fetchItemFromWowhead(itemId: number, gameVersion: string):
   }
 
   return { itemId, ...parsed };
+}
+
+export interface BasicWowheadItem {
+  itemId: number;
+  name: string;
+  quality: number;
+  icon: string | null;
+}
+
+/**
+ * Like `fetchItemFromWowhead` but for non-equippable items — tokens
+ * ("Helm of the Fallen Champion") and quest items, which have no
+ * `jsonequip` block at all and would be rejected by
+ * `fetchItemFromWowhead`/`parseEquippableEntry`. Used only for the
+ * "acquired via" mapping (§ token/quest-item acquisition design) — never
+ * for anything addable to a priority list.
+ */
+export async function fetchWowheadItemBasic(itemId: number, gameVersion: string): Promise<BasicWowheadItem> {
+  const html = await fetchItemPageHtml(itemId, gameVersion);
+
+  const raw = extractGathererItem(html, itemId);
+  if (!raw) {
+    throw new ApiError(502, 'WOWHEAD_FETCH_FAILED', `Item ${itemId} was not found in Wowhead's response.`);
+  }
+
+  const name = raw.name_enus;
+  const quality = raw.quality;
+  const icon = raw.icon;
+  if (typeof name !== 'string' || typeof quality !== 'number') {
+    throw new ApiError(502, 'WOWHEAD_FETCH_FAILED', `Unexpected Wowhead response shape for item ${itemId}.`);
+  }
+  return { itemId, name, quality, icon: typeof icon === 'string' ? icon : null };
 }
 
 export interface WowheadSearchResult {

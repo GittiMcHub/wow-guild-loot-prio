@@ -9,7 +9,7 @@ import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
 import { buildAddonExport } from '../services/addon-export.js';
 import { serializeAddonExportToLua } from '../services/lua-serializer.js';
-import { fetchItemFromWowhead } from '../services/wowhead-item.js';
+import { fetchItemFromWowhead, fetchWowheadItemBasic } from '../services/wowhead-item.js';
 
 const zCreatePhase = z.object({
   key: z.string().min(1).max(40),
@@ -35,6 +35,13 @@ const zAttachItem = z.object({
   slot: z.string().min(1),
   inventoryType: z.enum(['HEAD', 'NECK', 'SHOULDER', 'BACK', 'CHEST', 'WRIST', 'HANDS', 'WAIST', 'LEGS', 'FEET', 'FINGER', 'TRINKET', 'ONEHAND', 'TWOHAND', 'OFFHAND', 'SHIELD', 'RANGED', 'RELIC']),
   icon: z.string().nullable(),
+  // Set when this item isn't itself what drops — e.g. a tier token or a
+  // quest item produces it instead. Omitted/null clears any existing
+  // mapping (§ token/quest-item acquisition design).
+  acquiredVia: z
+    .object({ itemId: z.number().int().positive(), name: z.string().min(1).max(200), icon: z.string().nullable() })
+    .nullable()
+    .optional(),
 });
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -175,7 +182,16 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
         const conditions = [eq(phaseItems.phaseId, request.params.id), eq(phaseItems.enabled, true)];
         if (request.query.q) conditions.push(ilike(items.name, `%${request.query.q}%`));
         const rows = await tx
-          .select({ itemId: items.itemId, name: items.name, quality: items.quality, slot: items.slot, source: items.source })
+          .select({
+            itemId: items.itemId,
+            name: items.name,
+            quality: items.quality,
+            slot: items.slot,
+            source: items.source,
+            acquiredViaItemId: items.acquiredViaItemId,
+            acquiredViaName: items.acquiredViaName,
+            acquiredViaIcon: items.acquiredViaIcon,
+          })
           .from(phaseItems)
           .innerJoin(items, eq(items.itemId, phaseItems.itemId))
           .where(and(...conditions))
@@ -197,6 +213,7 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
         const [phase] = await tx.select().from(phases).where(eq(phases.id, request.params.id));
         if (!phase) return null;
 
+        const acquiredVia = body.data.acquiredVia ?? null;
         await tx
           .insert(items)
           .values({
@@ -206,10 +223,22 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
             slot: body.data.slot,
             inventoryType: body.data.inventoryType,
             icon: body.data.icon,
+            acquiredViaItemId: acquiredVia?.itemId ?? null,
+            acquiredViaName: acquiredVia?.name ?? null,
+            acquiredViaIcon: acquiredVia?.icon ?? null,
           })
           .onConflictDoUpdate({
             target: items.itemId,
-            set: { name: body.data.name, quality: body.data.quality, slot: body.data.slot, inventoryType: body.data.inventoryType, icon: body.data.icon },
+            set: {
+              name: body.data.name,
+              quality: body.data.quality,
+              slot: body.data.slot,
+              inventoryType: body.data.inventoryType,
+              icon: body.data.icon,
+              acquiredViaItemId: acquiredVia?.itemId ?? null,
+              acquiredViaName: acquiredVia?.name ?? null,
+              acquiredViaIcon: acquiredVia?.icon ?? null,
+            },
           });
         await tx
           .insert(phaseItems)
@@ -251,6 +280,29 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
 
       try {
         const item = await fetchItemFromWowhead(body.data.itemId, phase.gameVersion);
+        return item;
+      } catch (err) {
+        if (err instanceof ApiError) return sendError(reply, err);
+        throw err;
+      }
+    },
+  );
+
+  // Fetches a token/quest item's display data (§ token/quest-item
+  // acquisition design) — deliberately does NOT require jsonequip, unlike
+  // /items/fetch, since these are never equippable.
+  fastify.post<{ Params: { id: string } }>(
+    '/phases/:id/tokens/fetch',
+    { config: { tenant: 'admin' } },
+    async (request, reply) => {
+      const body = z.object({ itemId: z.number().int().positive() }).safeParse(request.body);
+      if (!body.success) return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid item ID.', body.error.flatten()));
+
+      const [phase] = await withRequestTenant(db, request, (tx) => tx.select().from(phases).where(eq(phases.id, request.params.id)));
+      if (!phase) return sendError(reply, notFound());
+
+      try {
+        const item = await fetchWowheadItemBasic(body.data.itemId, phase.gameVersion);
         return item;
       } catch (err) {
         if (err instanceof ApiError) return sendError(reply, err);

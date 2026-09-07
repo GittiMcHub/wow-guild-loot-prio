@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchItemFromWowhead, searchWowheadByName } from '../src/services/wowhead-item.js';
+import { fetchItemFromWowhead, fetchWowheadItemBasic, searchWowheadByName } from '../src/services/wowhead-item.js';
 
 /**
  * Wowhead has no documented item API. The only currently-working feed is the
@@ -173,5 +173,37 @@ describe('searchWowheadByName', () => {
     await searchWowheadByName('a & b', 'tbc');
     expect(calls[0]).toContain('tbc.wowhead.com');
     expect(calls[0]).toContain(encodeURIComponent('a & b'));
+  });
+});
+
+describe('fetchWowheadItemBasic', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('parses a non-equippable item (no jsonequip) that fetchItemFromWowhead would reject', async () => {
+    // Real shape for a token/quest item — no jsonequip block at all.
+    const html = GATHERER_PAGE_HTML(49888, '"name_enus":"Helm of the Fallen Champion","quality":4,"icon":"inv_helmet_87"');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => html }));
+
+    const item = await fetchWowheadItemBasic(49888, 'tbc');
+    expect(item).toEqual({ itemId: 49888, name: 'Helm of the Fallen Champion', quality: 4, icon: 'inv_helmet_87' });
+  });
+
+  it('rejects the equippable-only fetch for the same item', async () => {
+    const html = GATHERER_PAGE_HTML(49888, '"name_enus":"Helm of the Fallen Champion","quality":4,"icon":"inv_helmet_87"');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => html }));
+    await expect(fetchItemFromWowhead(49888, 'tbc')).rejects.toMatchObject({ code: 'WOWHEAD_FETCH_FAILED' });
+  });
+
+  it('throws WOWHEAD_FETCH_FAILED when the item id is not present in the response', async () => {
+    const html = GATHERER_PAGE_HTML(49888, '"name_enus":"Helm of the Fallen Champion","quality":4,"icon":"inv_helmet_87"');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => html }));
+    await expect(fetchWowheadItemBasic(123456789, 'tbc')).rejects.toMatchObject({ code: 'WOWHEAD_FETCH_FAILED' });
+  });
+
+  it('throws WOWHEAD_FETCH_FAILED on a network error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
+    await expect(fetchWowheadItemBasic(49888, 'tbc')).rejects.toMatchObject({ code: 'WOWHEAD_FETCH_FAILED' });
   });
 });

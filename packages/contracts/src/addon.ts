@@ -57,6 +57,10 @@ export const zAddonExport = z.object({
     }),
   ),
   items: z.record(z.string(), z.array(zAddonClaim)),
+  // Token/quest item ID -> the real item IDs it can produce (§ token/
+  // quest-item acquisition design). Additive — an addon reading an export
+  // without this field is unaffected for ordinary (non-token) drops.
+  tokens: z.record(z.string(), z.array(z.number().int())).optional(),
   awarded: z.array(zAddonAward),
   bisCounts: z.record(z.string(), z.number()),
   config: z.object({ equalDistribution: z.string(), bisCountScope: z.string(), weightOff: z.number() }),

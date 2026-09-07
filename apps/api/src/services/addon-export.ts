@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { resolveDrop, type ClaimInput } from '@glps/core';
 import { zAddonExport, type AddonAward, type AddonClaim, type AddonExport } from '@glps/contracts';
 import type { AppTx } from '../db/client.js';
-import { awards, characters, guildSettings, guilds, phases, players } from '../db/schema.js';
+import { awards, characters, guildSettings, guilds, items, phases, players } from '../db/schema.js';
 import { loadClaimsForPhase } from './claims.js';
 import { loadResolveOptions } from './resolve-options.js';
 
@@ -100,6 +100,28 @@ export async function buildAddonExport(tx: AppTx, guildId: string, phaseId: stri
     if (claimsOut.length > 0) itemsOut[String(itemId)] = claimsOut;
   }
 
+  // ---- tokens: reverse-index of token/quest item ID -> real item IDs it
+  // produces (§ token/quest-item acquisition design), for the real items
+  // that actually appear in itemsOut above.
+  const itemIdsWithClaims = Object.keys(itemsOut).map(Number);
+  let tokensOut: AddonExport['tokens'];
+  if (itemIdsWithClaims.length > 0) {
+    const acquiredViaRows = await tx
+      .select({ itemId: items.itemId, acquiredViaItemId: items.acquiredViaItemId })
+      .from(items)
+      .where(inArray(items.itemId, itemIdsWithClaims));
+    const grouped = new Map<number, number[]>();
+    for (const row of acquiredViaRows) {
+      if (row.acquiredViaItemId === null) continue;
+      const list = grouped.get(row.acquiredViaItemId) ?? [];
+      list.push(row.itemId);
+      grouped.set(row.acquiredViaItemId, list);
+    }
+    if (grouped.size > 0) {
+      tokensOut = Object.fromEntries([...grouped.entries()].sort(([a], [b]) => a - b).map(([k, v]) => [String(k), v.sort((a, b) => a - b)]));
+    }
+  }
+
   // ---- awarded: reshape the frozen explanation already stored at award time ----
   const awardRows = await tx.select().from(awards).where(eq(awards.phaseId, phaseId));
   const awardedOut: AddonAward[] = awardRows
@@ -146,6 +168,7 @@ export async function buildAddonExport(tx: AppTx, guildId: string, phaseId: stri
     checksum: '',
     players: playersOut,
     items: itemsOut,
+    ...(tokensOut ? { tokens: tokensOut } : {}),
     awarded: awardedOut,
     bisCounts,
     config: {

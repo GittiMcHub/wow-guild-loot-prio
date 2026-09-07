@@ -9,6 +9,11 @@ export interface CatalogEntry {
   icon: string | null;
   source: string | null;
   classMask: number | null;
+  // Set when this item isn't itself what drops — a tier token or quest
+  // item produces it instead (§ token/quest-item acquisition design).
+  acquiredViaItemId?: number | null;
+  acquiredViaName?: string | null;
+  acquiredViaIcon?: string | null;
 }
 
 export interface CharacterInfo {

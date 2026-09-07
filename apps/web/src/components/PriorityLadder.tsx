@@ -136,7 +136,7 @@ function LadderRow({
       <span className="w-8 shrink-0 font-mono text-lg text-emerald-400">#{rank}</span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">
-          <ItemLabel itemId={entry.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} />
+          <ItemLabel itemId={entry.itemId} name={item?.name} icon={item?.icon} quality={item?.quality} domain={wowheadDomain} acquiredViaItemId={item?.acquiredViaItemId} acquiredViaName={item?.acquiredViaName} acquiredViaIcon={item?.acquiredViaIcon} />
         </p>
         <p className="truncate text-xs text-zinc-500">
           {entry.slot} · {characterName}

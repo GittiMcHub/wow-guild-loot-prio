@@ -53,6 +53,7 @@ export function serializeAddonExportToLua(tree: AddonExport, phaseKey: string): 
     '  ',
   );
   const itemsTable = luaIndexedTable(tree.items, '  ');
+  const tokensTable = tree.tokens ? luaIndexedTable(tree.tokens, '  ') : undefined;
   const awardedArray = luaArray(
     tree.awarded.map((a) => ({ item: a.item, c: a.c, at: a.at, win: a.win, why: a.why, det: a.det })),
     '  ',
@@ -69,6 +70,7 @@ export function serializeAddonExportToLua(tree: AddonExport, phaseKey: string): 
     `  checksum = ${luaString(tree.checksum)},`,
     `  players = ${playersTable},`,
     `  items = ${itemsTable},`,
+    ...(tokensTable ? [`  tokens = ${tokensTable},`] : []),
     `  awarded = ${awardedArray},`,
     `  bisCounts = ${bisCountsTable},`,
     `  config = ${luaTable(tree.config as Record<string, unknown>, '  ')},`,

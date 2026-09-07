@@ -25,6 +25,9 @@ interface PhaseItem {
   quality: number;
   slot: string;
   source: string | null;
+  acquiredViaItemId: number | null;
+  acquiredViaName: string | null;
+  acquiredViaIcon: string | null;
 }
 
 interface FetchedItem {
@@ -34,6 +37,13 @@ interface FetchedItem {
   icon: string | null;
   inventoryType: string;
   slot: string;
+}
+
+interface BasicWowheadItem {
+  itemId: number;
+  name: string;
+  quality: number;
+  icon: string | null;
 }
 
 const INVENTORY_TYPES = ['HEAD', 'NECK', 'SHOULDER', 'BACK', 'CHEST', 'WRIST', 'HANDS', 'WAIST', 'LEGS', 'FEET', 'FINGER', 'TRINKET', 'ONEHAND', 'TWOHAND', 'OFFHAND', 'SHIELD', 'RANGED', 'RELIC'];
@@ -62,6 +72,9 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   const [preview, setPreview] = useState<FetchedItem | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [tokenIdInput, setTokenIdInput] = useState('');
+  const [acquiredVia, setAcquiredVia] = useState<BasicWowheadItem | null>(null);
+  const [tokenFetchError, setTokenFetchError] = useState<string | null>(null);
 
   const [listSizeEnabled, setListSizeEnabled] = useState(false);
   const [listSizeValue, setListSizeValue] = useState(20);
@@ -121,6 +134,9 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
     onSuccess: (item) => {
       setFetchError(null);
       setPreview(item);
+      setAcquiredVia(null);
+      setTokenIdInput('');
+      setTokenFetchError(null);
     },
     onError: (err) => {
       setFetchError(err instanceof ApiError ? err.message : 'Fetch failed.');
@@ -129,15 +145,32 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   });
 
   const attachMutation = useMutation({
-    mutationFn: (item: FetchedItem) => api.post('/phases/' + phaseId + '/items', item),
+    mutationFn: (item: FetchedItem) =>
+      api.post('/phases/' + phaseId + '/items', {
+        ...item,
+        acquiredVia: acquiredVia ? { itemId: acquiredVia.itemId, name: acquiredVia.name, icon: acquiredVia.icon } : null,
+      }),
     onSuccess: () => {
       setAttachError(null);
       setPreview(null);
       setItemIdInput('');
+      setAcquiredVia(null);
+      setTokenIdInput('');
       queryClient.invalidateQueries({ queryKey: ['admin-phase-items', phaseId] });
     },
     onError: (err) => {
       setAttachError(err instanceof ApiError ? err.message : 'Attach failed.');
+    },
+  });
+
+  const tokenFetchMutation = useMutation({
+    mutationFn: (tokenItemId: number) => api.post<BasicWowheadItem>(`/phases/${phaseId}/tokens/fetch`, { itemId: tokenItemId }),
+    onSuccess: (item) => {
+      setTokenFetchError(null);
+      setAcquiredVia(item);
+    },
+    onError: (err) => {
+      setTokenFetchError(err instanceof ApiError ? err.message : 'Fetch failed.');
     },
   });
 
@@ -279,6 +312,50 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
                 ))}
               </select>
             </label>
+
+            <div className="rounded border border-zinc-800 p-2">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Acquired via (optional)</p>
+              <p className="mb-2 text-xs text-zinc-500">
+                Set this if the item above doesn't itself drop — e.g. a tier token or quest item produces it instead.
+              </p>
+              {acquiredVia ? (
+                <div className="flex items-center gap-2 text-sm">
+                  {acquiredVia.icon && <img src={`https://wow.zamimg.com/images/wow/icons/medium/${acquiredVia.icon}.jpg`} alt="" className="h-5 w-5 rounded" />}
+                  <span className="text-amber-400">
+                    {acquiredVia.name} <span className="text-xs text-zinc-500">#{acquiredVia.itemId}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAcquiredVia(null);
+                      setTokenIdInput('');
+                    }}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={tokenIdInput}
+                    onChange={(e) => setTokenIdInput(e.target.value)}
+                    placeholder="Token/quest item ID"
+                    className="input max-w-[10rem]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => tokenFetchMutation.mutate(Number(tokenIdInput))}
+                    disabled={!/^\d+$/.test(tokenIdInput) || tokenFetchMutation.isPending}
+                    className="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700 disabled:opacity-50"
+                  >
+                    {tokenFetchMutation.isPending ? 'Fetching…' : 'Fetch'}
+                  </button>
+                </div>
+              )}
+              {tokenFetchError && <p className="mt-2 text-sm text-red-400">{tokenFetchError}</p>}
+            </div>
+
             <button
               onClick={() => attachMutation.mutate(preview)}
               disabled={!preview.name || attachMutation.isPending}
@@ -295,8 +372,15 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
       <ul className="space-y-1">
         {items.data?.items.map((item) => (
           <li key={item.itemId} className="flex items-center justify-between rounded border border-zinc-800 bg-zinc-900 p-2 text-sm">
-            <span className={QUALITY_COLOR[item.quality] ?? ''}>
-              {item.name} <span className="text-xs text-zinc-500">#{item.itemId}</span>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className={QUALITY_COLOR[item.quality] ?? ''}>
+                {item.name} <span className="text-xs text-zinc-500">#{item.itemId}</span>
+              </span>
+              {item.acquiredViaItemId && (
+                <span className="inline-flex items-center gap-1 rounded bg-amber-950/40 px-1.5 py-0.5 text-xs text-amber-400">
+                  🎟 via {item.acquiredViaName ?? `Item ${item.acquiredViaItemId}`} (#{item.acquiredViaItemId})
+                </span>
+              )}
             </span>
             <button onClick={() => removeMutation.mutate(item.itemId)} className="text-xs text-red-400 hover:text-red-300">
               Remove
