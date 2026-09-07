@@ -1,0 +1,1 @@
+ALTER TABLE "guild_settings" ADD COLUMN "owned_items_priority" text DEFAULT 'TOP' NOT NULL;

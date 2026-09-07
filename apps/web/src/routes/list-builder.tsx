@@ -14,7 +14,13 @@ interface Me {
   characters: CharacterInfo[];
   submissionStatus: 'DRAFT' | 'SUBMITTED';
   phase: { name: string; status: string; gameVersion: string; submissionsCloseAt: string | null; open: boolean; itemPoolMode: 'PREDEFINED' | 'OPEN' } | null;
-  settings: { listSize: number; twohandConsumesOffhand: boolean; allowAltOffspecInOffList: boolean; requireFullList: boolean } | null;
+  settings: {
+    listSize: number;
+    twohandConsumesOffhand: boolean;
+    allowAltOffspecInOffList: boolean;
+    requireFullList: boolean;
+    ownedItemsPriority: 'TOP' | 'BOTTOM';
+  } | null;
 }
 
 interface SubmissionEntryRow {
@@ -41,17 +47,28 @@ const SLOT_LABEL: Record<Slot, string> = {
   TRINKET_1: 'Trinket 1', TRINKET_2: 'Trinket 2', MAIN_HAND: 'Main hand', OFF_HAND: 'Off hand', RANGED: 'Ranged',
 };
 
-/** Owned entries must form an unbroken prefix — no unowned item above one. */
-function ownedIsContiguousPrefix(entries: DraftEntry[]): boolean {
-  let seenUnowned = false;
+/** Owned entries must form an unbroken block at the configured end — a
+ * prefix when pinned to TOP, a suffix when pinned to BOTTOM. */
+function ownedFormsContiguousBlock(entries: DraftEntry[], priority: 'TOP' | 'BOTTOM'): boolean {
+  let seenOther = false;
   for (const e of entries) {
-    if (e.owned) {
-      if (seenUnowned) return false;
+    const isBlockMember = priority === 'TOP' ? e.owned : !e.owned;
+    if (isBlockMember) {
+      if (seenOther) return false;
     } else {
-      seenUnowned = true;
+      seenOther = true;
     }
   }
   return true;
+}
+
+/** The index in `without` (an entries array with one entry already
+ * removed) where that entry belongs right after a toggle, regardless of
+ * which direction the toggle went — TOP and BOTTOM both use the same
+ * "first index belonging to the other group" formula, mirrored. */
+function ownedBoundaryIndex(without: DraftEntry[], priority: 'TOP' | 'BOTTOM'): number {
+  const idx = priority === 'TOP' ? without.findIndex((e) => !e.owned) : without.findIndex((e) => e.owned);
+  return idx === -1 ? without.length : idx;
 }
 
 function specFor(character: CharacterInfo, list: ListTier, useOffSpec: boolean): string {
@@ -265,8 +282,9 @@ export function ListBuilderPage({ token }: { token: string }) {
   }
 
   function reorder(next: DraftEntry[]) {
-    if (!ownedIsContiguousPrefix(next)) {
-      setRefusal('Owned items stay pinned to the top — drag within the owned group or the remaining group only.');
+    const priority = me.data?.settings?.ownedItemsPriority ?? 'TOP';
+    if (!ownedFormsContiguousBlock(next, priority)) {
+      setRefusal(`Owned items stay pinned to the ${priority === 'TOP' ? 'top' : 'bottom'} — drag within the owned group or the remaining group only.`);
       return;
     }
     setRefusal(null);
@@ -278,9 +296,10 @@ export function ListBuilderPage({ token }: { token: string }) {
   }
 
   /** Toggling owned moves the entry to the boundary between the owned and
-   * unowned blocks — the end of the owned block if now owned, which is the
-   * same position as the start of the unowned block if now unowned. */
+   * unowned blocks (see ownedBoundaryIndex) — which end that is depends on
+   * the phase's ownedItemsPriority setting. */
   function toggleOwned(key: string) {
+    const priority = me.data?.settings?.ownedItemsPriority ?? 'TOP';
     setState((prev) => {
       if (!prev) return prev;
       const list = prev[tab];
@@ -289,8 +308,7 @@ export function ListBuilderPage({ token }: { token: string }) {
       const current = list[idx]!;
       const entry = { ...current, owned: !current.owned };
       const without = list.filter((_, i) => i !== idx);
-      const at = without.findIndex((e) => !e.owned);
-      const insertAt = at === -1 ? without.length : at;
+      const insertAt = ownedBoundaryIndex(without, priority);
       const next = [...without.slice(0, insertAt), entry, ...without.slice(insertAt)];
       return { ...prev, [tab]: next };
     });
@@ -359,7 +377,9 @@ export function ListBuilderPage({ token }: { token: string }) {
         </div>
         <div>
           <h2 className="mb-1 font-medium text-zinc-300">Priority ladder</h2>
-          <p className="mb-2 text-xs text-zinc-500">Already-owned items are pinned to the top of your list.</p>
+          <p className="mb-2 text-xs text-zinc-500">
+            Already-owned items are pinned to the {(me.data?.settings?.ownedItemsPriority ?? 'TOP') === 'TOP' ? 'top' : 'bottom'} of your list.
+          </p>
           <PriorityLadder
             entries={state[tab]}
             effectiveCapacity={cap.effective}

@@ -47,6 +47,10 @@ export const guildSettings = pgTable('guild_settings', {
   allowAltOffspecInOffList: boolean('allow_alt_offspec_in_off_list').notNull().default(true),
   twohandConsumesOffhand: boolean('twohand_consumes_offhand').notNull().default(true),
   requireFullList: boolean('require_full_list').notNull().default(false),
+  // 'TOP' | 'BOTTOM' — which end of the priority ladder already-owned
+  // entries pin into. Player-facing UI concern only, not consumed by
+  // @glps/core's capacity/validation logic.
+  ownedItemsPriority: text('owned_items_priority').notNull().default('TOP'),
   fulfillCrossList: boolean('fulfill_cross_list').notNull().default(false),
   autoLockOnClose: boolean('auto_lock_on_close').notNull().default(true),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

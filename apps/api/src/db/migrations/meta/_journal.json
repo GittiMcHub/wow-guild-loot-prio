@@ -57,6 +57,13 @@
       "when": 1788800200000,
       "tag": "0007_items_acquired_via",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788800300000,
+      "tag": "0008_guild_settings_owned_items_priority",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import argon2 from 'argon2';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadCatalog } from '@glps/item-data';
 import { buildApp, type BuiltApp } from '../src/app.js';
@@ -79,5 +80,15 @@ describe('submission entry owned flag', () => {
     const entries = read.json().entries.sort((a: { rank: number }, b: { rank: number }) => a.rank - b.rank);
     expect(entries[0].owned).toBe(true);
     expect(entries[1].owned).toBe(false);
+  });
+
+  it('GET /me defaults settings.ownedItemsPriority to TOP and honors a phase override', async () => {
+    const before = await app.fastify.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${playerToken}` } });
+    expect(before.json().settings.ownedItemsPriority).toBe('TOP');
+
+    await withTenant(app.db, guildId, (tx) => tx.update(phases).set({ settingsOverride: { ownedItemsPriority: 'BOTTOM' } }).where(eq(phases.id, phaseId)));
+
+    const after = await app.fastify.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${playerToken}` } });
+    expect(after.json().settings.ownedItemsPriority).toBe('BOTTOM');
   });
 });

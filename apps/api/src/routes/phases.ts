@@ -12,7 +12,6 @@ import { serializeAddonExportToLua } from '../services/lua-serializer.js';
 import { fetchItemFromWowhead, fetchWowheadItemBasic } from '../services/wowhead-item.js';
 
 const zCreatePhase = z.object({
-  key: z.string().min(1).max(40),
   name: z.string().min(1).max(120),
   gameVersion: z.string().min(1),
 });
@@ -22,11 +21,27 @@ const zPatchPhase = z.object({
   submissionsCloseAt: z.string().datetime().nullable().optional(),
   itemPoolMode: z.enum(['PREDEFINED', 'OPEN']).optional(),
   settingsOverride: z
-    .object({ listSize: z.number().int().min(1).max(40), twohandConsumesOffhand: z.boolean(), allowAltOffspecInOffList: z.boolean(), requireFullList: z.boolean() })
+    .object({
+      listSize: z.number().int().min(1).max(40),
+      twohandConsumesOffhand: z.boolean(),
+      allowAltOffspecInOffList: z.boolean(),
+      requireFullList: z.boolean(),
+      ownedItemsPriority: z.enum(['TOP', 'BOTTOM']),
+    })
     .partial()
     .nullable()
     .optional(),
 });
+
+/** Lowercase, non-alphanumeric -> '-', trimmed, capped — for the auto-generated phase key (§ no more manual Key field). */
+function slugify(name: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30);
+  return base || 'phase';
+}
 const zUnlockRequest = z.object({ reason: z.string().min(3).max(500) });
 const zAttachItem = z.object({
   itemId: z.number().int().positive(),
@@ -62,9 +77,25 @@ const phasesRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { db }) 
     if (!body.success) return sendError(reply, new ApiError(400, 'VALIDATION_FAILED', 'Invalid phase payload.', body.error.flatten()));
     const guildId = request.tenant!.guildId;
     const id = uuidv7();
-    await withRequestTenant(db, request, (tx) =>
-      tx.insert(phases).values({ id, guildId, key: body.data.key, name: body.data.name, gameVersion: body.data.gameVersion, status: 'DRAFT' }),
-    );
+    try {
+      await withRequestTenant(db, request, async (tx) => {
+        const base = slugify(body.data.name);
+        const existing = await tx.select({ key: phases.key }).from(phases).where(and(eq(phases.guildId, guildId), ilike(phases.key, `${base}%`)));
+        const taken = new Set(existing.map((r) => r.key));
+        let key = base;
+        let n = 2;
+        while (taken.has(key)) key = `${base}-${n++}`;
+        await tx.insert(phases).values({ id, guildId, key, name: body.data.name, gameVersion: body.data.gameVersion, status: 'DRAFT' });
+      });
+    } catch (err) {
+      // TOCTOU: two concurrent creates deriving the same key from the same
+      // name both pass the pre-check. Rare (admin-only, low concurrency) —
+      // ask the requester to retry rather than silently renaming for them.
+      if ((err as { code?: string }).code === '23505') {
+        return sendError(reply, new ApiError(409, 'VALIDATION_FAILED', 'A phase with that name was just created — try again.'));
+      }
+      throw err;
+    }
     return { id };
   });
 

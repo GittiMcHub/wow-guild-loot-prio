@@ -7,13 +7,12 @@ const GAME_VERSIONS = ['classic-era', 'tbc', 'sod', 'cata', 'retail'] as const;
 
 export function NewPhasePage() {
   const navigate = useNavigate();
-  const [key, setKey] = useState('');
   const [name, setName] = useState('');
   const [gameVersion, setGameVersion] = useState<(typeof GAME_VERSIONS)[number]>('tbc');
   const [error, setError] = useState<string | null>(null);
 
   const createPhase = useMutation({
-    mutationFn: () => api.post<{ id: string }>('/phases', { key, name, gameVersion }),
+    mutationFn: () => api.post<{ id: string }>('/phases', { name, gameVersion }),
     onSuccess: (res) => navigate({ to: '/admin/phases/$phaseId/items', params: { phaseId: res.id } }),
     onError: (err) => setError(err instanceof ApiError ? err.message : 'Could not create phase.'),
   });
@@ -29,10 +28,6 @@ export function NewPhasePage() {
         className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900 p-6"
       >
         <h1 className="text-xl font-semibold">New phase</h1>
-        <label className="block text-sm">
-          <span className="mb-1 block text-zinc-400">Key</span>
-          <input required value={key} onChange={(e) => setKey(e.target.value)} placeholder="P4" className="input" />
-        </label>
         <label className="block text-sm">
           <span className="mb-1 block text-zinc-400">Name</span>
           <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Phase 4 — Naxxramas" className="input" />

@@ -261,4 +261,23 @@ describe('PATCH /phases/:id — item pool mode / settings override', () => {
     const [row] = await withTenant(app.db, guildId, (tx) => tx.select().from(phases).where(eq(phases.id, phaseId)));
     expect(row?.settingsOverride).toBeNull();
   });
+
+  it('sets ownedItemsPriority in settingsOverride and rejects an invalid value', async () => {
+    const res = await app.fastify.inject({
+      method: 'PATCH',
+      url: `/api/phases/${phaseId}`,
+      cookies: { glps_admin_at: adminCookie },
+      payload: { settingsOverride: { ownedItemsPriority: 'BOTTOM' } },
+    });
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
+    expect(res.json().settingsOverride).toEqual({ ownedItemsPriority: 'BOTTOM' });
+
+    const bad = await app.fastify.inject({
+      method: 'PATCH',
+      url: `/api/phases/${phaseId}`,
+      cookies: { glps_admin_at: adminCookie },
+      payload: { settingsOverride: { ownedItemsPriority: 'MIDDLE' } },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
 });

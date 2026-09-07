@@ -8,6 +8,7 @@ interface PhaseSettingsOverride {
   twohandConsumesOffhand?: boolean;
   allowAltOffspecInOffList?: boolean;
   requireFullList?: boolean;
+  ownedItemsPriority?: 'TOP' | 'BOTTOM';
 }
 
 interface Phase {
@@ -17,6 +18,24 @@ interface Phase {
   status: 'DRAFT' | 'OPEN' | 'LOCKED' | 'ARCHIVED';
   itemPoolMode: 'PREDEFINED' | 'OPEN';
   settingsOverride: PhaseSettingsOverride | null;
+}
+
+type BoolMode = 'INHERIT' | 'ON' | 'OFF';
+
+/** One row of the settings-override panel: a single select replaces the old
+ * pair of ambiguous checkboxes ("enable override" + "value") — the select's
+ * current option IS the state, nothing to cross-reference. */
+function BoolSettingRow({ label, mode, onChange }: { label: string; mode: BoolMode; onChange: (mode: BoolMode) => void }) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="w-56 text-zinc-400">{label}</span>
+      <select value={mode} onChange={(e) => onChange(e.target.value as BoolMode)} className="input max-w-[12rem]">
+        <option value="INHERIT">Inherit guild default</option>
+        <option value="ON">On</option>
+        <option value="OFF">Off</option>
+      </select>
+    </label>
+  );
 }
 
 interface PhaseItem {
@@ -76,14 +95,12 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   const [acquiredVia, setAcquiredVia] = useState<BasicWowheadItem | null>(null);
   const [tokenFetchError, setTokenFetchError] = useState<string | null>(null);
 
-  const [listSizeEnabled, setListSizeEnabled] = useState(false);
+  const [listSizeMode, setListSizeMode] = useState<'INHERIT' | 'CUSTOM'>('INHERIT');
   const [listSizeValue, setListSizeValue] = useState(20);
-  const [twohandEnabled, setTwohandEnabled] = useState(false);
-  const [twohandValue, setTwohandValue] = useState(false);
-  const [altOffspecEnabled, setAltOffspecEnabled] = useState(false);
-  const [altOffspecValue, setAltOffspecValue] = useState(false);
-  const [requireFullListEnabled, setRequireFullListEnabled] = useState(false);
-  const [requireFullListValue, setRequireFullListValue] = useState(false);
+  const [twohandMode, setTwohandMode] = useState<BoolMode>('INHERIT');
+  const [altOffspecMode, setAltOffspecMode] = useState<BoolMode>('INHERIT');
+  const [requireFullListMode, setRequireFullListMode] = useState<BoolMode>('INHERIT');
+  const [ownedItemsPriorityMode, setOwnedItemsPriorityMode] = useState<'INHERIT' | 'TOP' | 'BOTTOM'>('INHERIT');
   const [settingsDraftLoaded, setSettingsDraftLoaded] = useState(false);
 
   const phase = useQuery<Phase>({ queryKey: ['admin-phase', phaseId], queryFn: () => api.get<Phase>(`/phases/${phaseId}`) });
@@ -92,17 +109,17 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   useEffect(() => {
     if (settingsDraftLoaded || !phase.data) return;
     const override = phase.data.settingsOverride;
+    const boolMode = (v: boolean | undefined): BoolMode => (v === undefined ? 'INHERIT' : v ? 'ON' : 'OFF');
     // One-time draft seed from server data on first load, not a sync loop — safe to batch.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setListSizeEnabled(override?.listSize !== undefined);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setListSizeMode(override?.listSize !== undefined ? 'CUSTOM' : 'INHERIT');
     setListSizeValue(override?.listSize ?? 20);
-    setTwohandEnabled(override?.twohandConsumesOffhand !== undefined);
-    setTwohandValue(override?.twohandConsumesOffhand ?? false);
-    setAltOffspecEnabled(override?.allowAltOffspecInOffList !== undefined);
-    setAltOffspecValue(override?.allowAltOffspecInOffList ?? false);
-    setRequireFullListEnabled(override?.requireFullList !== undefined);
-    setRequireFullListValue(override?.requireFullList ?? false);
+    setTwohandMode(boolMode(override?.twohandConsumesOffhand));
+    setAltOffspecMode(boolMode(override?.allowAltOffspecInOffList));
+    setRequireFullListMode(boolMode(override?.requireFullList));
+    setOwnedItemsPriorityMode(override?.ownedItemsPriority ?? 'INHERIT');
     setSettingsDraftLoaded(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [phase.data, settingsDraftLoaded]);
 
   const statusMutation = useMutation({
@@ -122,10 +139,11 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
 
   const saveSettings = () => {
     const draft: PhaseSettingsOverride = {};
-    if (listSizeEnabled) draft.listSize = listSizeValue;
-    if (twohandEnabled) draft.twohandConsumesOffhand = twohandValue;
-    if (altOffspecEnabled) draft.allowAltOffspecInOffList = altOffspecValue;
-    if (requireFullListEnabled) draft.requireFullList = requireFullListValue;
+    if (listSizeMode === 'CUSTOM') draft.listSize = listSizeValue;
+    if (twohandMode !== 'INHERIT') draft.twohandConsumesOffhand = twohandMode === 'ON';
+    if (altOffspecMode !== 'INHERIT') draft.allowAltOffspecInOffList = altOffspecMode === 'ON';
+    if (requireFullListMode !== 'INHERIT') draft.requireFullList = requireFullListMode === 'ON';
+    if (ownedItemsPriorityMode !== 'INHERIT') draft.ownedItemsPriority = ownedItemsPriorityMode;
     settingsMutation.mutate(Object.keys(draft).length === 0 ? null : draft);
   };
 
@@ -223,35 +241,39 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
 
       <div className="mb-4 rounded border border-zinc-800 bg-zinc-900 p-4">
         <h2 className="mb-2 font-medium text-zinc-300">Settings override</h2>
-        <p className="mb-3 text-sm text-zinc-500">Override the guild's default settings for this phase only. Unchecked fields inherit the guild default.</p>
+        <p className="mb-3 text-sm text-zinc-500">Override the guild's default settings for this phase only. "Inherit guild default" leaves that setting alone.</p>
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={listSizeEnabled} onChange={(e) => setListSizeEnabled(e.target.checked)} />
-            <span className="w-40 text-zinc-400">List size</span>
-            <input
-              type="number"
-              min={1}
-              max={40}
-              value={listSizeValue}
-              onChange={(e) => setListSizeValue(Number(e.target.value))}
-              disabled={!listSizeEnabled}
-              className="input max-w-[6rem] disabled:opacity-50"
-            />
+            <span className="w-56 text-zinc-400">List size</span>
+            <select value={listSizeMode} onChange={(e) => setListSizeMode(e.target.value as 'INHERIT' | 'CUSTOM')} className="input max-w-[12rem]">
+              <option value="INHERIT">Inherit guild default</option>
+              <option value="CUSTOM">Custom</option>
+            </select>
+            {listSizeMode === 'CUSTOM' && (
+              <input
+                type="number"
+                min={1}
+                max={40}
+                value={listSizeValue}
+                onChange={(e) => setListSizeValue(Number(e.target.value))}
+                className="input max-w-[6rem]"
+              />
+            )}
           </label>
+          <BoolSettingRow label="Twohand consumes offhand" mode={twohandMode} onChange={setTwohandMode} />
+          <BoolSettingRow label="Allow alt offspec in off-list" mode={altOffspecMode} onChange={setAltOffspecMode} />
+          <BoolSettingRow label="Require full list" mode={requireFullListMode} onChange={setRequireFullListMode} />
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={twohandEnabled} onChange={(e) => setTwohandEnabled(e.target.checked)} />
-            <span className="w-40 text-zinc-400">Twohand consumes offhand</span>
-            <input type="checkbox" checked={twohandValue} onChange={(e) => setTwohandValue(e.target.checked)} disabled={!twohandEnabled} />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={altOffspecEnabled} onChange={(e) => setAltOffspecEnabled(e.target.checked)} />
-            <span className="w-40 text-zinc-400">Allow alt offspec in off-list</span>
-            <input type="checkbox" checked={altOffspecValue} onChange={(e) => setAltOffspecValue(e.target.checked)} disabled={!altOffspecEnabled} />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={requireFullListEnabled} onChange={(e) => setRequireFullListEnabled(e.target.checked)} />
-            <span className="w-40 text-zinc-400">Require full list</span>
-            <input type="checkbox" checked={requireFullListValue} onChange={(e) => setRequireFullListValue(e.target.checked)} disabled={!requireFullListEnabled} />
+            <span className="w-56 text-zinc-400">Already-owned items consume priority from the</span>
+            <select
+              value={ownedItemsPriorityMode}
+              onChange={(e) => setOwnedItemsPriorityMode(e.target.value as 'INHERIT' | 'TOP' | 'BOTTOM')}
+              className="input max-w-[12rem]"
+            >
+              <option value="INHERIT">Inherit guild default</option>
+              <option value="TOP">Top</option>
+              <option value="BOTTOM">Bottom</option>
+            </select>
           </label>
         </div>
         <button

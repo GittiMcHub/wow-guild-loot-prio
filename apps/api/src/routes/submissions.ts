@@ -7,7 +7,7 @@ import { withRequestTenant } from '../db/request-tx.js';
 import { characters, guildSettings, items, phaseItems, phases, players, submissionEntries, submissions } from '../db/schema.js';
 import { uuidv7 } from '../db/uuid.js';
 import { ApiError, notFound, sendError } from '../errors.js';
-import { mergeSettings, type EffectiveSettings } from '../services/phase-settings.js';
+import { mergeSettings, type EffectiveSettings, type PlayerFacingSettings } from '../services/phase-settings.js';
 import { fetchItemFromWowhead, searchWowheadByName } from '../services/wowhead-item.js';
 
 async function loadPlayerContext(tx: AppTx, playerId: string) {
@@ -81,14 +81,15 @@ const submissionsRoutes: FastifyPluginAsync<{ db: AppDb }> = async (fastify, { d
       // Enough of guild_settings for the client to run @glps/core's computeCapacity
       // and validateSubmission live (§10) — never the full admin settings object.
       settings: ctx.settings
-        ? mergeSettings(
+        ? mergeSettings<PlayerFacingSettings>(
             {
               listSize: ctx.settings.listSize,
               twohandConsumesOffhand: ctx.settings.twohandConsumesOffhand,
               allowAltOffspecInOffList: ctx.settings.allowAltOffspecInOffList,
               requireFullList: ctx.settings.requireFullList,
+              ownedItemsPriority: ctx.settings.ownedItemsPriority as 'TOP' | 'BOTTOM',
             },
-            (ctx.phase?.settingsOverride as Partial<EffectiveSettings> | null) ?? null,
+            (ctx.phase?.settingsOverride as Partial<PlayerFacingSettings> | null) ?? null,
           )
         : null,
     };
