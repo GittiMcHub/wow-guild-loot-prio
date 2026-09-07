@@ -70,6 +70,8 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
   useEffect(() => {
     if (settingsDraftLoaded || !phase.data) return;
     const override = phase.data.settingsOverride;
+    // One-time draft seed from server data on first load, not a sync loop — safe to batch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setListSizeEnabled(override?.listSize !== undefined);
     setListSizeValue(override?.listSize ?? 20);
     setTwohandEnabled(override?.twohandConsumesOffhand !== undefined);
