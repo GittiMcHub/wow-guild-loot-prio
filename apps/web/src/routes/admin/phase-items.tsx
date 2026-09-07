@@ -38,6 +38,15 @@ interface FetchedItem {
 
 const INVENTORY_TYPES = ['HEAD', 'NECK', 'SHOULDER', 'BACK', 'CHEST', 'WRIST', 'HANDS', 'WAIST', 'LEGS', 'FEET', 'FINGER', 'TRINKET', 'ONEHAND', 'TWOHAND', 'OFFHAND', 'SHIELD', 'RANGED', 'RELIC'];
 
+// Mirrors SLOT_BY_INVENTORY_TYPE in apps/api/src/services/wowhead-item.ts: the catalog
+// collapses all one/two-hand, offhand and shield inventory types into a single WEAPON
+// slot; everything else maps to itself. A manual inventory-type correction must apply
+// the same collapse, not copy the inventory type into slot verbatim.
+const WEAPON_INVENTORY_TYPES = new Set(['ONEHAND', 'TWOHAND', 'OFFHAND', 'SHIELD']);
+function slotForInventoryType(inventoryType: string): string {
+  return WEAPON_INVENTORY_TYPES.has(inventoryType) ? 'WEAPON' : inventoryType;
+}
+
 const NEXT_STATUS: Record<Phase['status'], Array<{ to: Phase['status']; label: string }>> = {
   DRAFT: [{ to: 'OPEN', label: 'Open' }],
   OPEN: [{ to: 'LOCKED', label: 'Lock' }],
@@ -262,7 +271,7 @@ export function AdminPhaseItemsPage({ phaseId }: { phaseId: string }) {
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-zinc-400">Inventory type</span>
-              <select value={preview.inventoryType} onChange={(e) => setPreview({ ...preview, inventoryType: e.target.value, slot: e.target.value })} className="input">
+              <select value={preview.inventoryType} onChange={(e) => setPreview({ ...preview, inventoryType: e.target.value, slot: slotForInventoryType(e.target.value) })} className="input">
                 {INVENTORY_TYPES.map((t) => (
                   <option key={t} value={t}>
                     {t}
