@@ -1,0 +1,41 @@
+{
+  "$comment": [
+    "Project-scoped Claude Code settings for a repo managed by agent-stack.",
+    "The permission list is a soft constraint. Branch protection on main is the",
+    "hard one -- everything here is something an agent could talk itself around."
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git worktree:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh run:*)",
+      "Bash(gh api:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npm ci)",
+      "Bash(rg:*)",
+      "Read(//home/agent/repos/**)",
+      "Read(//home/agent/workspaces/**)",
+      "mcp__github-po",
+      "mcp__github-eng"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push origin main:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh repo delete:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/id_rsa*)"
+    ]
+  }
+}
