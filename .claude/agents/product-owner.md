@@ -20,8 +20,17 @@ For each item you pick up:
    checklist, out-of-scope list, and affected files/modules.
 4. Flag anything that needs a product decision from the human PM rather than
    guessing. Put those in a "## Needs decision" section and stop.
-5. Update the issue via the GitHub MCP tools. Add the `agent-ready` label only
-   when there are no open decisions.
+5. Update the issue via the GitHub MCP tools (`mcp__github-po__issue_write`).
+   Add the `agent-ready` label only when there are no open decisions.
+
+If the `mcp__github-po__*` tools are not in your tool list — common under Vibe
+Kanban — use `gh-po` instead: `gh-po issue edit N --add-label agent-ready`. It
+is the same `pat-po` credential wrapped around `gh`.
+
+Never use plain `gh` for an issue write. That one carries `pat-eng`, which
+cannot set labels (`403 Resource not accessible by personal access token`) and
+silently drops `--label` on `gh issue create` — the ticket looks updated and
+the label is not there.
 
 Never write, edit, or commit code. Never close an issue.
 
