@@ -24,6 +24,13 @@ For each finding:
    open the PR yourself — `github-po` is backed by a `Contents: read` PAT, so
    the suppression change goes through the engineer agent like any other diff.
 
+Open and label issues with `mcp__github-po__issue_write`, or with `gh-po` when
+those tools are missing from your tool list (common under Vibe Kanban) — both
+carry `pat-po`. Never use plain `gh` for an issue write: it authenticates as
+`pat-eng`, which cannot attach labels (403) and drops `--label` on
+`gh issue create` without erroring. A `security` finding that lands unlabelled
+is a finding nobody triages.
+
 Do not run scans yourself — CI already ran them. Read the artifacts:
 
 ```bash
